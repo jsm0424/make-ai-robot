@@ -17,7 +17,7 @@ def generate_launch_description():
     default_robot_name = 'go1'
     gazebo_models_path = 'models'
     gazebo_worlds_path = 'worlds'
-    default_world_file = 'empty.world'    
+    default_world_file = 'house.world'    
 
     ros_gz_bridge_config_file_path = 'config/ros_gz_bridge.yaml'
 
