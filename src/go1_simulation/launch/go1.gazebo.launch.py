@@ -2,7 +2,7 @@
 
 import os
 from launch import LaunchDescription
-from launch.actions import (AppendEnvironmentVariable, DeclareLaunchArgument, IncludeLaunchDescription)
+from launch.actions import (AppendEnvironmentVariable, DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -17,15 +17,28 @@ def generate_launch_description():
     default_robot_name = 'go1'
     gazebo_models_path = 'models'
     gazebo_worlds_path = 'worlds'
-    default_world_file = 'house.world'    
+    gazebo_fuel_models_path = 'fuel_models'
+    default_world_file = 'empty.world'    
 
     ros_gz_bridge_config_file_path = 'config/ros_gz_bridge.yaml'
 
     # Set the path to different files and folders
     pkg_ros_gz_sim = FindPackageShare(package='ros_gz_sim').find('ros_gz_sim')
     pkg_share = FindPackageShare(package=package_name).find(package_name)
-    gazebo_models_path = os.path.join(pkg_share, gazebo_models_path)
+    pkg_hospital_world = FindPackageShare(package='aws_robomaker_hospital_world').find('aws_robomaker_hospital_world')
+    gazebo_simple_models_path = os.path.join(pkg_share, gazebo_models_path)
+    gazebo_hospital_models_path = os.path.join(pkg_hospital_world, gazebo_models_path)
+    gazebo_hospital_fuel_models_path = os.path.join(pkg_hospital_world, gazebo_fuel_models_path)
     default_ros_gz_bridge_config_file_path = os.path.join(pkg_share, ros_gz_bridge_config_file_path)
+
+    # 기존 GZ_SIM_RESOURCE_PATH와 시스템 기본 경로 추가
+    gz_resource_path = os.environ.get('GZ_SIM_RESOURCE_PATH', '')
+    gz_default_paths = '/usr/share/gz'
+    
+    if gz_resource_path:
+        gz_resource_path = f"{gazebo_simple_models_path}:{gazebo_hospital_models_path}:{gazebo_hospital_fuel_models_path}:{gz_default_paths}:{gz_resource_path}"
+    else:
+        gz_resource_path = f"{gazebo_simple_models_path}:{gazebo_hospital_models_path}:{gazebo_hospital_fuel_models_path}:{gz_default_paths}"    
 
     # Launch configuration variables
     robot_name = LaunchConfiguration('robot_name')
@@ -37,12 +50,6 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     world_file = LaunchConfiguration('world_file')
     use_gt_pose = LaunchConfiguration('use_gt_pose')
-
-    world_path = PathJoinSubstitution([
-        pkg_share,
-        gazebo_worlds_path,
-        world_file
-    ])
 
     # Set the pose configuration variables
     x = LaunchConfiguration('x')
@@ -130,11 +137,28 @@ def generate_launch_description():
         default_value='0.0',
         description='yaw angle of initial orientation, radians')
 
-    # Start Gazebo
-    start_gazebo_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
-        launch_arguments=[('gz_args', [' -r -v 4 ', world_path])])
+    # Set Gazebo model path
+
+    set_gz_resource_path = SetEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=gz_resource_path
+    )    
+
+    # Function to conditionally launch the appropriate Gazebo world
+    def launch_gazebo_world(context, *args, **kwargs):
+        world_file_value = LaunchConfiguration('world_file').perform(context)
+        
+        if world_file_value == 'hospital.world':
+            world_path = os.path.join(pkg_hospital_world, 'worlds', world_file_value)
+        else:
+            world_path = os.path.join(pkg_share, 'worlds', world_file_value)
+        
+        # Return the IncludeLaunchDescription action with the resolved world path
+        return [IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
+            launch_arguments=[('gz_args', [' -r ', world_path])]
+        )]
 
     # Bridge ROS topics and Gazebo messages for establishing communication
     start_gazebo_ros_bridge_cmd = Node(
@@ -170,11 +194,6 @@ def generate_launch_description():
         }.items(),
         condition=IfCondition(load_controllers)
     )
-
-    # Set Gazebo model path
-    set_env_vars_resources = AppendEnvironmentVariable(
-        'GZ_SIM_RESOURCE_PATH',
-        gazebo_models_path)
 
     # Spawn the robot
     start_gazebo_ros_spawner_cmd = Node(
@@ -224,8 +243,8 @@ def generate_launch_description():
     ld.add_action(declare_yaw_cmd)
 
     # Add the actions to the launch description
-    ld.add_action(set_env_vars_resources)
-    ld.add_action(start_gazebo_cmd)
+    ld.add_action(set_gz_resource_path)
+    ld.add_action(OpaqueFunction(function=launch_gazebo_world))
     ld.add_action(start_gazebo_ros_bridge_cmd)
     ld.add_action(robot_state_publisher_cmd)
     ld.add_action(load_controllers_cmd)
