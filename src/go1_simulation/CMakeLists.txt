@@ -57,10 +57,9 @@ install(
     launch                    # Launch files for starting nodes and systems
     urdf                      # Robot description files (URDF/Xacro)
     meshes                    # 3D model files for visualization
-    models                    # Gazebo model files
-    worlds                    # Gazebo world files
     rviz                      # RViz configuration files
     config                    # Configuration files for controllers
+    maps                      # Map files
     go1_simulation            # Python package directory
   DESTINATION share/${PROJECT_NAME}  # Install to: install/share/panda_controller/
 )
@@ -78,7 +77,9 @@ ament_python_install_package(${PROJECT_NAME})
 install(
   PROGRAMS
     go1_simulation/go1_gt_pose_publisher.py    # Python node for ground truth pose publisher
+    go1_simulation/publish_pointcloud.py        # Python script for publishing the pointcloud
     go1_simulation/move_go1_with_keyboard.py    # Python script for moving the robot with the keyboard
+    go1_simulation/save_map.py                # Python script for saving the map
   DESTINATION lib/${PROJECT_NAME}       # Install to: install/lib/go1_simulation/
 )
 

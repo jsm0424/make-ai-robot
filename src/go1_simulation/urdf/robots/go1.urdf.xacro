@@ -10,6 +10,7 @@
     <xacro:include filename="$(find go1_simulation)/urdf/mech/trunk.urdf.xacro"/>
     <xacro:include filename="$(find go1_simulation)/urdf/mech/leg.urdf.xacro"/>
     <xacro:include filename="$(find go1_simulation)/urdf/sensors/depthCamera.urdf.xacro"/>
+    <xacro:include filename="$(find go1_simulation)/urdf/mech/cylinder.urdf.xacro"/>
     <xacro:include filename="$(find go1_simulation)/urdf/sensors/imu.urdf.xacro"/>
     <xacro:include filename="$(find go1_simulation)/urdf/sensors/lidar.urdf.xacro"/>
 
@@ -41,6 +42,12 @@
     <xacro:depthCamera camID="1" name="face">
         <origin rpy="${PI} 0 0" xyz="0.2785 0.0125 0.0167"/>
     </xacro:depthCamera>
+
+    <xacro:cylinder name='top_camera_cylinder' base_link="trunk" z_offset="0.35" radius="0.01" length="0.30"/>
+    <xacro:depthCamera camID="2" name="top" base_link="top_camera_cylinder">
+        <origin rpy="${PI} 0 0" xyz="0 0 0"/>
+    </xacro:depthCamera>    
+
 
     <xacro:macro name="material_visual" params="reference ambient diffuse specular">
         <gazebo reference="${reference}">

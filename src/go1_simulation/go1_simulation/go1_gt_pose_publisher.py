@@ -4,12 +4,18 @@
 This script reads from Gazebo's '/world/default/dynamic_pose/info' topic directly via CLI,
 finds the 'go1' robot pose, and publishes it.
 
-Publishes:
-- geometry_msgs/msg/PoseStamped (3D pose) to '/go1_pose'
-- geometry_msgs/msg/Pose2D (x, y, theta) to '/go1_pose_2d'
-- TF transform from 'world' to 'base' frame
+Parameters:
+- comparison (bool, default=True): If True, publishes to '/go1_pose' and '/go1_pose_2d' without TF.
+                                    If False, publishes to '/go1_pose_gt' and '/go1_pose_2d_gt' with TF.
 
-No arguments needed - automatically publishes both 3D and 2D poses.
+Publishes:
+- geometry_msgs/msg/PoseStamped (3D pose) to '/go1_pose' or '/go1_pose_gt'
+- geometry_msgs/msg/Pose2D (x, y, theta) to '/go1_pose_2d' or '/go1_pose_2d_gt'
+- TF transform from 'map' to 'odom' to 'base' frame (only when comparison=False)
+
+Usage examples:
+- Default (comparison=True): ros2 run go1_simulation go1_gt_pose_publisher
+- With comparison=False: ros2 run go1_simulation go1_gt_pose_publisher --ros-args -p comparison:=false
 
 """
 
@@ -29,11 +35,23 @@ class Go1GTPosePublisher(Node):
     ROS 2 node that reads Gazebo's dynamic pose info topic via CLI,
     finds the 'go1' robot pose, and publishes it.
     Publishes both 3D pose (PoseStamped) and 2D pose (Pose2D).
-    Also broadcasts TF transform from world to base frame.
+    Broadcasts TF transform from map to odom to base frame only when comparison=False.
     """
 
     def __init__(self):
         super().__init__('go1_gt_pose_publisher')
+        
+        # Declare and get the 'comparison' parameter
+        self.declare_parameter('comparison', True)
+        self.comparison = self.get_parameter('comparison').get_parameter_value().bool_value
+        
+        # Determine topic names based on comparison parameter
+        if self.comparison:
+            self.topic_3d = '/go1_pose_gt'
+            self.topic_2d = '/go1_pose_2d_gt'
+        else:
+            self.topic_3d = '/go1_pose'
+            self.topic_2d = '/go1_pose_2d'
         
         # Store the latest simulation time from /clock
         self.current_sim_time = None
@@ -53,23 +71,27 @@ class Go1GTPosePublisher(Node):
         # Create publisher for 3D pose
         self.publisher_3d = self.create_publisher(
             PoseStamped,
-            '/go1_pose',
+            self.topic_3d,
             10
         )
         
         # Create publisher for 2D pose
         self.publisher_2d = self.create_publisher(
             Pose2D,
-            '/go1_pose_2d',
+            self.topic_2d,
             10
         )
         
         self.get_logger().info('Ground truth pose publisher node started')
+        self.get_logger().info(f'Comparison mode: {self.comparison}')
         self.get_logger().info('Subscribing to /clock for simulation time')
-        self.get_logger().info('Publishing to: /go1_pose (PoseStamped: full 3D pose)')
-        self.get_logger().info('Publishing to: /go1_pose_2d (Pose2D: x, y, theta)')
+        self.get_logger().info(f'Publishing to: {self.topic_3d} (PoseStamped: full 3D pose)')
+        self.get_logger().info(f'Publishing to: {self.topic_2d} (Pose2D: x, y, theta)')
         self.get_logger().info('Reading from Gazebo topic: /world/default/dynamic_pose/info')
-        self.get_logger().info('Broadcasting TF: world -> base')
+        if not self.comparison:
+            self.get_logger().info('Broadcasting TF: map -> odom -> base')
+        else:
+            self.get_logger().info('TF broadcasting disabled (comparison mode)')
         
         # Start thread to read from gz topic
         self.running = True
@@ -169,6 +191,7 @@ class Go1GTPosePublisher(Node):
         """
         Publish pose data as ROS messages and TF.
         Publishes both 3D and 2D poses.
+        Only broadcasts TF when comparison is False.
         
         Args:
             pose_data: Dictionary with position and orientation data
@@ -180,30 +203,52 @@ class Go1GTPosePublisher(Node):
                 return
             current_time = self.current_sim_time
         
-        # Broadcast TF transform from world to base
-        t = TransformStamped()
-        t.header.stamp = current_time
-        t.header.frame_id = 'world'
-        t.child_frame_id = 'base'
-        
-        # Set translation
-        t.transform.translation.x = pose_data['position']['x']
-        t.transform.translation.y = pose_data['position']['y']
-        t.transform.translation.z = pose_data['position']['z']
-        
-        # Set rotation (quaternion)
-        t.transform.rotation.x = pose_data['orientation']['x']
-        t.transform.rotation.y = pose_data['orientation']['y']
-        t.transform.rotation.z = pose_data['orientation']['z']
-        t.transform.rotation.w = pose_data['orientation']['w']
-        
-        # Broadcast the transform
-        self.tf_broadcaster.sendTransform(t)
+        # Only broadcast TF transforms when comparison is False
+        if not self.comparison:
+            # Broadcast TF transform from map to odom
+            t = TransformStamped()
+            t.header.stamp = current_time
+            t.header.frame_id = 'map'
+            t.child_frame_id = 'odom'
+            
+            # Set translation
+            t.transform.translation.x = 0.0
+            t.transform.translation.y = 0.0
+            t.transform.translation.z = 0.0
+            
+            # Set rotation (quaternion)
+            t.transform.rotation.x = 0.0
+            t.transform.rotation.y = 0.0
+            t.transform.rotation.z = 0.0
+            t.transform.rotation.w = 1.0
+
+            # Broadcast the transform
+            self.tf_broadcaster.sendTransform(t)        
+
+            # Broadcast TF transform from odom to base
+            t = TransformStamped()
+            t.header.stamp = current_time
+            t.header.frame_id = 'odom'
+            t.child_frame_id = 'base'
+            
+            # Set translation
+            t.transform.translation.x = pose_data['position']['x']
+            t.transform.translation.y = pose_data['position']['y']
+            t.transform.translation.z = pose_data['position']['z']
+            
+            # Set rotation (quaternion)
+            t.transform.rotation.x = pose_data['orientation']['x']
+            t.transform.rotation.y = pose_data['orientation']['y']
+            t.transform.rotation.z = pose_data['orientation']['z']
+            t.transform.rotation.w = pose_data['orientation']['w']        
+            
+            # Broadcast the transform
+            self.tf_broadcaster.sendTransform(t)
         
         # Publish 3D pose (PoseStamped)
         pose_stamped = PoseStamped()
         pose_stamped.header.stamp = current_time
-        pose_stamped.header.frame_id = 'world'
+        pose_stamped.header.frame_id = 'map'
         
         pose_stamped.pose.position.x = pose_data['position']['x']
         pose_stamped.pose.position.y = pose_data['position']['y']

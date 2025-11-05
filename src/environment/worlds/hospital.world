@@ -59,7 +59,7 @@
     </light>
     
     <!-- Ground plane -->
-    <model name="ground_plane">
+    <!-- <model name="ground_plane">
       <static>true</static>
       <link name="link">
         <collision name="collision">
@@ -83,7 +83,8 @@
           </material>
         </visual>
       </link>
-    </model>
+    </model> -->
+
     <model name="aws_robomaker_hospital_floor_01_floor_1">
       <include>
         <uri>model://aws_robomaker_hospital_floor_01_floor</uri>
@@ -243,20 +244,6 @@
         <uri>model://Scrubs</uri>
         <static>true</static>
         <pose>0.054597 4.05849 0 0 -0 3.12413</pose>
-      </include>
-    </model>
-    <model name="PatientWheelChair_1">
-      <include>
-        <uri>model://PatientWheelChair</uri>
-        <static>true</static>
-        <pose>-5.46091 1.23577 0 0 0 -1.54828</pose>
-      </include>
-    </model>
-    <model name="Scrubs_3">
-      <include>
-        <uri>model://Scrubs</uri>
-        <static>true</static>
-        <pose>-5.38513 1.82526 0 0 0 -1.63757</pose>
       </include>
     </model>
     <model name="WhiteChipChair_1">
@@ -875,20 +862,6 @@
         <pose>-10.8902 9.18683 0.228965 0 -0 1.58161</pose>
       </include>
     </model>
-    <model name="MaleVisitorOnPhone_1">
-      <include>
-        <uri>model://MaleVisitorOnPhone</uri>
-        <static>true</static>
-        <pose>-0.760316 7.58474 0 0 0 -1.14974</pose>
-      </include>
-    </model>
-    <model name="FemaleVisitor_1">
-      <include>
-        <uri>model://FemaleVisitor</uri>
-        <static>true</static>
-        <pose>0.416835 7.44353 0 0 -0 0</pose>
-      </include>
-    </model>
     <model name="MaleVisitorSit_2">
       <include>
         <uri>model://MaleVisitorSit</uri>
@@ -1015,13 +988,6 @@
         <pose>7.85005 6.59766 0 0 0 -1.5621</pose>
       </include>
     </model>
-    <model name="InstrumentCart1_3">
-      <include>
-        <uri>model://InstrumentCart1</uri>
-        <static>true</static>
-        <pose>-1.83539 -17.5879 0 0 -0 0</pose>
-      </include>
-    </model>
     <model name="ParkingTrolleyMax_1">
       <include>
         <uri>model://ParkingTrolleyMax</uri>
@@ -1034,13 +1000,6 @@
         <uri>model://ElderMalePatient</uri>
         <static>true</static>
         <pose>-11.2471 -3.5813 0.001656 0 -0 -0.054192</pose>
-      </include>
-    </model>
-    <model name="Chair_3">
-      <include>
-        <uri>model://Chair</uri>
-        <static>true</static>
-        <pose>-1.37633 -0.795802 0 -1e-06 0 -1.54998</pose>
       </include>
     </model>
     <model name="XRayMachine_1">
@@ -1085,13 +1044,6 @@
         <pose>-9.75875 -2.67552 0 0 -0 0</pose>
       </include>
     </model>
-    <model name="BPCart_1">
-      <include>
-        <uri>model://BPCart</uri>
-        <static>true</static>
-        <pose>-10.1788 11.173 0.003446 1e-06 -0 0.003096</pose>
-      </include>
-    </model>
     <model name="BPCart_2">
       <include>
         <uri>model://BPCart</uri>
@@ -1125,13 +1077,6 @@
         <uri>model://VendingMachine</uri>
         <static>true</static>
         <pose>8.35378 9.64852 -3e-06 -6e-06 0 0</pose>
-      </include>
-    </model>
-    <model name="Chair_4">
-      <include>
-        <uri>model://Chair</uri>
-        <static>true</static>
-        <pose>1.30985 -0.727185 -0 0 0 -1.53446</pose>
       </include>
     </model>
   </world>

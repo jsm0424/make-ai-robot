@@ -1,6 +1,6 @@
-# ROS2 Practice Repository of "How to make a robot with artificial intelligence" Class.
+# ROS2 Practice Repository for Creating Robot Artificial Ingelligence Project (CRAIP)
 
-This repository is for ROS2 practice of 2025 Fall "How to Make a Robot with Artificial Intelligence" class.
+This repository is for ROS2 practice of 2025 Fall "Creating Robot Artificial Ingelligence Project" class.
 
 It contains a collection of ROS2 packages for simulating and controlling the Unitree Go1 quadruped robot.
 
@@ -36,6 +36,7 @@ Gazebo Harmonic simulation environment for the Unitree Go1 robot with full ROS2 
 - ROS2 control integration
 - Ground truth pose publisher
 - Keyboard teleoperation
+- Map Publisher (Also generator)
 
 ### 2. **path_tracker**
 MPPI (Model Predictive Path Integral) based path tracking controller for mobile robots.
@@ -64,7 +65,6 @@ High-level locomotion controller for Unitree Go1 robot.
 - Balance control and estimation
 - Trotting gait implementation
 - ROS2 integration for simulation
-
 
 ---
 
@@ -162,13 +162,17 @@ ros2 launch go1_simulation go1.gazebo.launch.py use_gt_pose:=true
 
 You should see both Gazebo and RViz:
 
+In Rviz, you can see colored 3D pointcloud from RGB-D camera and red 2D pointcloud from LiDAR
+
+
 <img src="images/start_gazebo.png" alt="Gazebo Simulation" width="600"/>
+
+
 <img src="images/start_rviz_1.png" alt="RViz Visualization 1" width="600"/>
-<img src="images/start_rviz_2.png" alt="RViz Visualization 2" width="600"/>
 
 **Launch Arguments:**
-- `world_file:=<world_name>.world` - Choose world (empty, cafe, house)
-- `x:=0.0 y:=0.0 z:=0.5` - Initial robot position
+- `world_file:=<world_name>.world` - Choose world (hopital, empty, cafe, house) (Default: hospital)
+- `x:=0.0 y:=1.0 z:=0.5` - Initial robot position (Default: x=0.0, y=1.0, z=0.5)
 - `use_gt_pose` - Use Ground Truth (GT) pose of "trunk" link for localization (Data is from Gazebo)
 
 **Example:**
@@ -176,7 +180,24 @@ You should see both Gazebo and RViz:
 ros2 launch go1_simulation go1.gazebo.launch.py use_gt_pose:=true world_file:=cafe.world x:=2.0 y:=3.0
 ```
 
-### 2. Unitree Guide Controller
+**⚠️ Important Reminder** 
+
+Currently you are using ground truth pose of robot from simulator. But you should implement your own localization module without relying on GT. In the competition, it is not allowed to use any GT value. All the information should be from sensors (RGB-D Camera, LiDAR, IMU and map) and you should calculate what you want from it.
+
+### 2: Visualize pre-built 2D occupancy grid map
+
+To visualize map in RViz:
+```bash
+ros2 launch go1_simulation visualize_map.launch.py
+```
+
+You should see the map in RViz:
+
+You can compare pointcloud and pre-built map
+
+<img src="images/start_rviz_2.png" alt="RViz Visualization 2" width="600"/>
+
+### 3. Unitree Guide Controller
 
 Run the high-level locomotion controller:
 
@@ -202,7 +223,9 @@ After you run this node, press a number key (1-5) to change robot's status in th
 
 Please watch below video
 
+
 <img src="images/use_junior_ctrl.gif" alt="Robot Control Demo" width="600"/>
+
 
 ### Keyboard Teleoperation
 
@@ -217,7 +240,7 @@ You can also use a CLI command (this command is for rotation):
 ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.05, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.2}}" -r 10
 ```
 
-### 3. Path Tracking
+### 4. Path Tracking
 
 **Step 1**: Launch the MPPI path tracker:
 
@@ -248,6 +271,11 @@ ros2 topic echo /go1_pose
 **Tips:**
 - Make sure the robot is in "move base" mode (press 5 in `junior_ctrl` terminal)
 - The robot will generate a smooth curved path to the target
+
+**⚠️ Important Reminder** 
+
+Current `move_robot.py` does not consider collision at all. You should implement your own path planner for collision avoidance. Planned path will be passed to `path_tracker_launch.py` and robot will follow that path.
+For the better path following, you can tune the parameters in `path_tracker/config/mppi.yaml`.
 
 ---
 
@@ -310,13 +338,52 @@ Create a ROS2 node (Python or C++) that:
 You should make your path planner module for MPPI path tracker.
 
 TBD - Do not change here yet
-
+If you move the robot,
 ### 3. Perception Module
 You should make your perception module.
 
 TBD - Do not change here yet
 
 ---
+
+## ⚔️ Competition
+
+### Mission 1
+
+**Goal**: Find toilet in the map 
+
+**What you need to do**: 
+
+With undetermined natural command, navigate robot to the toilet. For this mission only, you can calculate position of toilet before the mission, and utilize it. For other mission, it is never allowed to use pre-calculated position or orientation. Also it is not allowed to use ground truth pose of objects in simulation.
+
+
+<img src="images/mission_1.png" alt="Mission 1" width="600"/>
+
+
+### Mission 2
+
+**Goal**: Find something to eat in the map
+
+**What you need to do**: 
+
+With undetermined natural command, find something to eat and bark in front of it. The robot should distinguish good food and bad food. The food are placed somewhere in the map. Robot should explore the map, find the food, distinguish it is edible or not, and bark in front of it. 
+
+For `bark`, robot need to publish string message "bark" to `bark` topic 5 times when these conditions are satisfied:
+1. Food should be visible in RGB image of `camera_head` or `camera_top`.
+2. Food should be placed at the horizontal center of the image.
+3. Robot should be close enough to the food.
+
+These are food which will be used for the mission 2. 
+
+Left food are good food which is edible. Right ones are bad food.
+
+**The position of food is not important.** (Good apple on the floor or on the sky is also edible.)
+
+<img src="images/mission_2_1.png" alt="Mission 2 1" width="600"/>
+
+
+<img src="images/mission_2_2.png" alt="Mission 2 2" width="600"/>
+
 
 ## 💡 Helpful Tips for ROS2 Beginners
 
@@ -365,7 +432,7 @@ ros2 node info /path_tracker
 ROS2 typically requires multiple terminal windows. Here's a suggested workflow:
 
 1. **Terminal 1**: Launch Gazebo simulation
-2. **Terminal 2**: Run robot controller (`junior_ctrl`)
+2. **Terminal 2**: Run robot controller (`junior_ctrl`)If you move the robot,
 3. **Terminal 3**: Run additional nodes (keyboard control, path tracker, etc.)
 4. **Terminal 4**: Monitor topics and debugging
 
@@ -438,3 +505,39 @@ joint_state_broadcaster joint_state_broadcaster/JointStateBroadcaster        act
 RL_thigh_controller     ros2_unitree_legged_control/UnitreeLeggedController  active
 RR_hip_controller       ros2_unitree_legged_control/UnitreeLeggedController  active
 ```
+
+## 🗺️ Build New Map
+
+To build a new map, instead of currently built one, you can use another argument for `visualize_map.launch.py`
+
+After starting the simulation, use this command:
+```bash
+ros2 launch go1_simulation visualize_map.launch.py generate_new_map:=true
+```
+
+You should see this, after few seconds:
+
+
+<img src="images/generate_map_1.png" alt="Map Generation 1" width="600"/>
+
+As you move the robot, map is updated incrementally.
+
+
+<img src="images/generate_map_2.png" alt="Map Generation 2" width="600"/>
+
+If you want to save current map, follow these commands:
+```bash
+# 1. Stop robot
+# Set robot mode as 'fixed stand': Press number 2 in junior_ctrl node
+# Without this, robot sometimes die during map saving
+
+# 2. Save the map
+# In the separate terminal run this command:
+ros2 run go1_simulation save_map.py
+```
+
+You should see two new files:
+
+`~/make_ai_robot/src/go1_simulation/maps/my_world.pgm`
+
+`~/make_ai_robot/src/go1_simulation/maps/my_world.yaml`

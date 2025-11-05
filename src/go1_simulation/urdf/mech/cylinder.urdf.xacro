@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:macro name="cylinder" params="name base_link z_offset radius length">
+
+        <joint name="({name})_joint" type="fixed">
+            <origin xyz="0 0 ${z_offset}" rpy="0 0 0"/>
+            <parent link="${base_link}"/>
+            <child link="${name}"/>
+        </joint>
+
+        <link name="${name}">
+            <visual>
+                <origin xyz="0 0 -${length/2}" rpy="0 0 0"/>
+                <geometry>
+                    <cylinder radius="${radius}" length="${length}"/>
+                </geometry>
+                <material name="silver"/>
+            </visual>
+
+            <inertial>
+                <mass value="1e-5" />
+                <origin xyz="0 0 -${length/2}" rpy="0 0 0"/>
+                <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+            </inertial>
+        </link>     
+
+    </xacro:macro>
+
+</robot>

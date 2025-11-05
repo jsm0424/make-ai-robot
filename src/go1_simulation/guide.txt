@@ -29,8 +29,30 @@ ros2 topic pub /FL_hip_controller/command \
   "{mode: 10, q: 0.3, dq: 0.0, tau: 1.0, kp: 100.0, kd: 5.0}" -r 100
 
 # Start Gazebo without Launch File
-export GZ_SIM_RESOURCE_PATH="/opt/ros/jazzy/share:/home/roy/make_ai_robot/src/go1_simulation/models"
-ros2 launch ros_gz_sim gz_sim.launch.py gz_args:='-r -v 4 house.world'
+export GZ_SIM_RESOURCE_PATH="/opt/ros/jazzy/share:/home/roy/make_ai_robot/src/environment/models:/home/roy/make_ai_robot/src/environment/fuel_models"
+ros2 launch ros_gz_sim gz_sim.launch.py gz_args:='-r -v 4 /home/roy/make_ai_robot/src/environment/worlds/test_project_assets.world'
+ros2 launch ros_gz_sim gz_sim.launch.py gz_args:='-r -v 4 /home/roy/make_ai_robot/src/environment/worlds/empty.world'
+ros2 launch ros_gz_sim gz_sim.launch.py gz_args:='-r -v 4 /home/roy/make_ai_robot/src/environment/worlds/hospital.world'
+
 
 # Check ROS2 controllers
 ros2 control list_controllers
+
+# Initial Go1 Pose
+---
+header:
+  stamp:
+    sec: 28
+    nanosec: 95000000
+  frame_id: map
+pose:
+  position:
+    x: -0.023526575134320406
+    y: 0.9880402154815338
+    z: 0.05699955272397481
+  orientation:
+    x: 1.0415526851566268e-10
+    y: -5.758263084047967e-07
+    z: -0.0005171218437557097
+    w: 0.9999998662923246
+---

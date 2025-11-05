@@ -25,18 +25,39 @@
   lazy: true   
 
 - ros_topic_name: "camera_face/depth"
-  gz_topic_name: "/camera_face/depth_image"
+  gz_topic_name: "camera_face/depth_image"
   ros_type_name: "sensor_msgs/msg/Image"
   gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
   lazy: true     
 
-- ros_topic_name: "camera_face/points"
-  gz_topic_name: "camera_face/points"
-  ros_type_name: "sensor_msgs/msg/PointCloud2"
-  gz_type_name: "gz.msgs.PointCloudPacked"
+# - ros_topic_name: "camera_face/points"
+#   gz_topic_name: "camera_face/points"
+#   ros_type_name: "sensor_msgs/msg/PointCloud2"
+#   gz_type_name: "gz.msgs.PointCloudPacked"
+#   direction: GZ_TO_ROS
+#   lazy: true  
+
+- ros_topic_name: "camera_top/camera_info"
+  gz_topic_name: "camera_top/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS
-  lazy: true
+  lazy: true 
+
+- ros_topic_name: "camera_top/image"
+  gz_topic_name: "camera_top/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true   
+
+- ros_topic_name: "camera_top/depth"
+  gz_topic_name: "camera_top/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true       
 
 # IMU configuration
 - ros_topic_name: "imu_plugin/out"

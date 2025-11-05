@@ -1,0 +1,157 @@
+<?xml version="1.0" ?>
+
+<sdf version="1.6">
+  <world name="default">
+
+    <!-- Plugin for simulating physics -->
+    <plugin
+      filename="gz-sim-physics-system"
+      name="gz::sim::systems::Physics">
+    </plugin>
+
+    <!-- Plugin for handling user commands -->
+    <plugin
+      filename="gz-sim-user-commands-system"
+      name="gz::sim::systems::UserCommands">
+    </plugin>
+
+    <!-- Plugin for broadcasting scene updates -->
+    <plugin
+      filename="gz-sim-scene-broadcaster-system"
+      name="gz::sim::systems::SceneBroadcaster">
+    </plugin>
+
+    <!-- Plugin for handling sensors like the LIDAR -->
+    <plugin
+      filename="gz-sim-sensors-system"
+      name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <!-- Plugin for IMU -->
+    <plugin filename="gz-sim-imu-system"
+      name="gz::sim::systems::Imu">
+    </plugin>
+
+    <!-- To add realistic gravity, do: 0.0 0.0 -9.8, otherwise do 0.0 0.0 0.0 -->
+    <gravity>0.0 0.0 -9.8</gravity>    
+
+     <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>1 1 1 1</diffuse>
+      <specular>0.5 0.5 0.5 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- Include a model of the Ground Plane from an external URI -->
+    <include>
+      <uri>
+        https://fuel.gazebosim.org/1.0/OpenRobotics/models/Ground Plane
+      </uri>
+    </include>
+
+    <model name="banana_good_white_dish">
+      <include>
+        <uri>model://WhiteDish</uri>
+        <static>true</static>
+        <pose>0.26 0.15 0.0 0 0 0</pose>
+      </include>
+    </model>  
+
+    <model name="banana_good">
+      <include>
+        <uri>model://BananaGood</uri>
+        <static>true</static>
+        <pose>0.26 0.15 0.05 0 0 0</pose>
+      </include>
+    </model>
+
+    <model name="banana_bad_white_dish">
+      <include>
+        <uri>model://WhiteDish</uri>
+        <static>true</static>
+        <pose>0.26 -0.15 0.0 0 0 0</pose>
+      </include>
+    </model>      
+
+    <model name="banana_bad">
+      <include>
+        <uri>model://BananaBad</uri>
+        <static>true</static>
+        <pose>0.26 -0.15 0.05 0 0 0</pose>
+      </include>
+    </model>
+
+    <model name="apple_good_white_dish">
+      <include>
+        <uri>model://WhiteDish</uri>
+        <static>true</static>
+        <pose>0.0 0.3 0.0 0 0 0</pose>
+      </include>
+    </model>  
+
+    <model name="apple_good">
+      <include>
+        <uri>model://AppleGood</uri>
+        <static>true</static>
+        <pose>0.0 0.3 0.05 0 0 0</pose>
+      </include>
+    </model>        
+
+    <model name="apple_bad_white_dish">
+      <include>
+        <uri>model://WhiteDish</uri>
+        <static>true</static>
+        <pose>0.0 -0.3 0.0 0 0 0</pose>
+      </include>
+    </model>    
+
+    <model name="apple_bad">
+      <include>
+        <uri>model://AppleBad</uri>
+        <static>true</static>
+        <pose>0.0 -0.3 0.05 0 0 0</pose>
+      </include>
+    </model>
+
+    <model name="pizza_good_white_dish">
+      <include>
+        <uri>model://WhiteDish</uri>
+        <static>true</static>
+        <pose>-0.26 0.15 0.0 0 0 0</pose>
+      </include>
+    </model>    
+
+    <model name="pizza_good">
+      <include>
+        <uri>model://PizzaGood</uri>
+        <static>true</static>
+        <pose>-0.26 0.15 0.05 0 0 0</pose>
+      </include>
+    </model>   
+
+    <model name="pizza_bad_white_dish">
+      <include>
+        <uri>model://WhiteDish</uri>
+        <static>true</static>
+        <pose>-0.26 -0.15 0.0 0 0 0</pose>
+      </include>
+    </model>    
+
+    <model name="pizza_bad">
+      <include>
+        <uri>model://PizzaBad</uri>
+        <static>true</static>
+        <pose>-0.26 -0.15 0.05 0 0 0</pose>
+      </include>
+    </model>       
+
+  </world>
+</sdf>

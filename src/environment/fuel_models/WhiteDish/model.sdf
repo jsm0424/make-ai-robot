@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name='WhiteDish'>
+    <link name="body">
+      <pose>0 0 0 0 0 0</pose>
+
+      <visual name="visual">
+        <pose>0 0 0.013 1.5708 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://WhiteDish/meshes/white_dish.glb</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </visual>
+
+      <collision name="collision">
+        <pose>0 0 0.013 1.5708 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://WhiteDish/meshes/white_dish.glb</uri>
+            <scale>1.0 1.0 1.0</scale>
+          </mesh>
+        </geometry>
+      </collision>
+
+    </link>
+  </model>
+</sdf>
