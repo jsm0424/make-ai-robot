@@ -84,6 +84,7 @@ install(
     go1_simulation/publish_pointcloud.py        # Python script for publishing the pointcloud
     go1_simulation/move_go1_with_keyboard.py    # Python script for moving the robot with the keyboard
     go1_simulation/save_map.py                # Python script for saving the 2D Occupancy Grid Map
+    go1_simulation/camera_recorder.py
   DESTINATION lib/${PROJECT_NAME}       # Install to: install/lib/go1_simulation/
 )
 
