@@ -23,8 +23,10 @@ public:
   {
     // Declare parameters
     this->declare_parameter<double>("resolution", 1.0);
+    this->declare_parameter<double>("robot_radius", 0.4); // Default 0.4m radius (approx for Go1)
     
     resolution_ = this->get_parameter("resolution").as_double();
+    robot_radius_meters_ = this->get_parameter("robot_radius").as_double();
     
     // Initialize
     has_map_ = false;
@@ -51,6 +53,7 @@ public:
     goal_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/goal_marker", 10);
     
     RCLCPP_INFO(this->get_logger(), "Path Planner Node initialized");
+    RCLCPP_INFO(this->get_logger(), "Robot Radius: %.2f meters", robot_radius_meters_);
     RCLCPP_INFO(this->get_logger(), "Use RViz2 '2D Goal Pose' tool to set a goal");
   }
 
@@ -63,6 +66,9 @@ private:
     int width = msg->info.width;
     int height = msg->info.height;
     
+    // Update resolution from map info if available
+    resolution_ = msg->info.resolution;
+
     map_grid_.clear();
     map_grid_.resize(height, std::vector<int>(width));
     
@@ -81,9 +87,15 @@ private:
     
     astar_.setMap(map_grid_);
     
+    // NEW: Calculate radius in grid cells and set it in AStar
+    // We use ceil to ensure we cover the full radius, safer for collision avoidance
+    int radius_in_cells = std::ceil(robot_radius_meters_ / resolution_);
+    astar_.setRobotRadius(radius_in_cells);
+    
     if (!has_map_) {
       has_map_ = true;
-      RCLCPP_INFO(this->get_logger(), "Map received: %dx%d", width, height);
+      RCLCPP_INFO(this->get_logger(), "Map received: %dx%d, Res: %.2f", width, height, resolution_);
+      RCLCPP_INFO(this->get_logger(), "Robot Radius in cells: %d", radius_in_cells);
     }
   }
   
@@ -176,7 +188,7 @@ private:
     auto path_cells = astar_.findPath(start, goal);
     
     if (path_cells.empty()) {
-      RCLCPP_WARN(this->get_logger(), "No path found!");
+      RCLCPP_WARN(this->get_logger(), "No path found! (Goal or Start might be too close to obstacle)");
       return;
     }
     
@@ -340,6 +352,7 @@ private:
   
   // Parameters
   double resolution_;
+  double robot_radius_meters_;
 };
 
 int main(int argc, char * argv[])
@@ -349,4 +362,3 @@ int main(int argc, char * argv[])
   rclcpp::shutdown();
   return 0;
 }
-

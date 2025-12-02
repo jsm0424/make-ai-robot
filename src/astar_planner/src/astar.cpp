@@ -6,7 +6,7 @@ namespace astar_planner
 {
 
 AStar::AStar()
-: map_width_(0), map_height_(0)
+: map_width_(0), map_height_(0), robot_radius_(0)
 {
 }
 
@@ -23,6 +23,12 @@ void AStar::setMap(const std::vector<std::vector<int>>& map)
   }
 }
 
+// NEW: Set the physical radius of the robot (converted to grid cells)
+void AStar::setRobotRadius(int radius_in_cells)
+{
+  robot_radius_ = radius_in_cells;
+}
+
 double AStar::calculateHeuristic(const GridCell& a, const GridCell& b) const
 {
   double dx = static_cast<double>(a.x - b.x);
@@ -30,13 +36,35 @@ double AStar::calculateHeuristic(const GridCell& a, const GridCell& b) const
   return std::sqrt(dx * dx + dy * dy);
 }
 
+// MODIFIED: Checks for collision considering the robot's radius
 bool AStar::isValid(const GridCell& cell) const
 {
+  // 1. Check if the center is within map bounds
   if (cell.x < 0 || cell.x >= map_width_ || cell.y < 0 || cell.y >= map_height_) {
     return false;
   }
-  // 0 means free space, 1 means obstacle
-  return map_[cell.y][cell.x] == 0;
+
+  // 2. Check collision for the robot's footprint
+  // We iterate through a square area around the center cell defined by robot_radius_
+  for (int dy = -robot_radius_; dy <= robot_radius_; ++dy) {
+    for (int dx = -robot_radius_; dx <= robot_radius_; ++dx) {
+      int check_x = cell.x + dx;
+      int check_y = cell.y + dy;
+
+      // Check if this part of the robot body is off the map
+      if (check_x < 0 || check_x >= map_width_ || check_y < 0 || check_y >= map_height_) {
+        return false;
+      }
+
+      // Check if this part of the robot body hits an obstacle
+      // 0 means free space, 1 means obstacle
+      if (map_[check_y][check_x] != 0) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 std::vector<GridCell> AStar::getNeighbors(const GridCell& cell) const
@@ -57,6 +85,7 @@ std::vector<GridCell> AStar::getNeighbors(const GridCell& cell) const
   
   for (const auto& dir : directions) {
     GridCell neighbor = {cell.x + dir.first, cell.y + dir.second};
+    // isValid now handles the size check
     if (isValid(neighbor)) {
       neighbors.push_back(neighbor);
     }
@@ -182,4 +211,3 @@ std::vector<GridCell> AStar::findPath(const GridCell& start, const GridCell& goa
 }
 
 }  // namespace astar_planner
-
