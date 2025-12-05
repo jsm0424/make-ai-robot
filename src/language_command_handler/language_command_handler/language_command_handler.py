@@ -14,6 +14,7 @@ import signal
 import openai
 import yaml
 import time
+import re  # [추가됨] 정규표현식 모듈
 
 from ament_index_python.packages import get_package_share_directory
 import rclpy
@@ -44,13 +45,26 @@ def parse_LLM_response(response_text: str) -> str:
     """
     Parse the response text from LLM to select the appropriate action
     """
-    response = response_text.strip()
-    if response.startswith("```python"):
-        response = response[len("```python"):].strip()
-    if response.endswith("```"):
-        response = response[:-len("```")].strip()
 
-    return response
+    
+    #response = response_text.strip()
+    #if response.startswith("```python"):
+    #    response = response[len("```python"):].strip()
+    #if response.endswith("```"):
+    #    response = response[:-len("```")].strip()
+
+    # [수정됨] 정규표현식으로 ```python ... ``` 사이의 내용만 추출
+    pattern = r"```python\s*(.*?)\s*```"
+    match = re.search(pattern, response_text, re.DOTALL)
+
+    if match:
+        return match.group(1).strip()
+
+    # 2. 코드 블록이 없으면 기존 방식대로 잡담 제거 시도
+    cleaned = response_text.replace("```python", "").replace("```", "").strip()
+    # 혹시 'User:' 같은 잡담이 앞뒤에 붙어있을 수 있으니, 파일명(py)만 남기기 위해 마지막 줄만 가져오는 등의 처리가 가능하지만,
+    # 일단 위 정규식에서 대부분 걸러집니다.
+    return cleaned
 
 
 class LanguageCommandHandler(Node):

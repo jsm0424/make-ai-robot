@@ -21,11 +21,16 @@ def generate_launch_description():
     # Get launch arguments
     x = LaunchConfiguration('x')
     y = LaunchConfiguration('y')
+    z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
+
+    num_particles = LaunchConfiguration('num_particles')
+
 
     # Declare launch arguments
     declare_x_cmd = DeclareLaunchArgument('x', default_value='0.0')
     declare_y_cmd = DeclareLaunchArgument('y', default_value='1.0')
+    declare_z_cmd = DeclareLaunchArgument('z', default_value='0.5')
     declare_yaw_cmd = DeclareLaunchArgument('yaw', default_value='0.0')
 
     global_localizer_node = Node(
@@ -36,13 +41,16 @@ def generate_launch_description():
         parameters=[{
             'x': x,
             'y': y,
-            'yaw': yaw
+            'z': z,
+            'yaw': yaw,
+            'num_particles': num_particles
         }]
     )
     
     ld = LaunchDescription()
     ld.add_action(declare_x_cmd)
     ld.add_action(declare_y_cmd)
+    ld.add_action(declare_z_cmd)
     ld.add_action(declare_yaw_cmd)
     ld.add_action(global_localizer_node)
 

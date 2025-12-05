@@ -85,6 +85,7 @@ install(
     go1_simulation/move_go1_with_keyboard.py    # Python script for moving the robot with the keyboard
     go1_simulation/save_map.py                # Python script for saving the 2D Occupancy Grid Map
     go1_simulation/camera_recorder.py
+    go1_simulation/image_saver.py
   DESTINATION lib/${PROJECT_NAME}       # Install to: install/lib/go1_simulation/
 )
 

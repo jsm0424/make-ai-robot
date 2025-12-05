@@ -64,7 +64,7 @@ def generate_launch_description():
             [
                 f"source {home_path}/anaconda3/etc/profile.d/conda.sh && "
                 f"conda activate {anaconda_env_name} && "
-                f"source /opt/ros/jazzy/setup.bash && "
+                f"source /opt/ros/humble/setup.bash && "
                 f"source {workspace_install_path} && "
                 "export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6:/usr/lib/x86_64-linux-gnu/libgcc_s.so.1 && "
                 f"{python_executable} {python_script_path} --ros-args -p config_path:={config_file_path}",

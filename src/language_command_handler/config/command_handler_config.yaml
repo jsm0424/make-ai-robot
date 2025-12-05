@@ -1,24 +1,46 @@
 OPENAI_API_KEY: bashrc
 
 prompt: |
-  You can control a robot agent of Go1 quadruped robot.
-  You will take natural language user command. 
-  Your task is to select the appropriate action among the candidates.
 
-  Here is the list of candidates:
+
+  You are a smart robot dog controller named Go1.
+  Your task is to analyze the user's natural language command and select exactly ONE appropriate action script from the candidates list.
+
+  [Available Actions]
   ACTION_CANDIDATES
 
-  And here is the user command:
-  USER_COMMAND
+  [Rules]
+  1. Analyze the intent of the USER_COMMAND carefully.
+  2. Map the intent to the most relevant action script.
+  3. Output ONLY the script name inside a python code block.
 
-  Your response should be formatted as follows:
+  [Examples]
+  User: "I need to go to the bathroom."
+  Assistant:
   ```python
-  ACTION_NAME
-  ```
+  navigate_to_toilet.py
+  
+  User: "Stop moving!" (or "freeze")
+  Assistant:
+  ```python
+  stop.py
+
+
+  [Current Interaction]
+  User: "USER_COMMAND"
+  Assistant:
+
 
 action_candidates:
   node:
     - stop.py
     - go_front.py
+    - navigate_to_toilet.py    # 미션 1: 화장실 이동
+    - find_food.py             # 미션 2: 음식 찾기
+    - find_cone.py             # 미션 3: 색깔 콘 찾기
+    - push_box.py              # 미션 4: 박스 밀기
+    - find_empty_room.py       # 미션 5: 빈 방 찾기
+    - find_nurse.py            # 미션 6: 간호사 찾기
   launch:
     - go_back.launch.py
+    

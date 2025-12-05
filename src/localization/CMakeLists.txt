@@ -6,25 +6,28 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 ##### CHANGE START #####
+
 ###### find dependencies ######
 find_package(ament_cmake REQUIRED)
 
 ##### Copy folders to install directory #####
 install(
-  DIRECTORY
-  launch
+  DIRECTORY 
+    launch
   DESTINATION share/${PROJECT_NAME}
 )
 
 # Install Python entry points as executables
 install(
   PROGRAMS
-  localization/global_localizer_node.py
-  localization/odom_localizer_node.py
-  localization/utils.py
+    localization/odom_localizer_node.py
+    localization/global_localizer_node.py
+    localization/utils.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
 ##### CHANGE END #####
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

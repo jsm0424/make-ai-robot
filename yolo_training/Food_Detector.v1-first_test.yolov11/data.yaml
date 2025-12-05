@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 12
+names: ['badapple', 'badbanana', 'badpizza', 'blue_cone', 'box', 'freshapple', 'freshbanana', 'freshpizza', 'green_cone', 'nurse', 'red_cone', 'sign']
+
+roboflow:
+  workspace: bulnabi-v9go5
+  project: food_detector-hj2kb
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/bulnabi-v9go5/food_detector-hj2kb/dataset/1
