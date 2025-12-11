@@ -8,6 +8,9 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch.actions import TimerAction
+from launch.actions import RegisterEventHandler
+from launch.event_handlers import OnProcessExit
 
 
 def generate_launch_description():
@@ -26,7 +29,7 @@ def generate_launch_description():
     models_dir_name = 'models'
     fuel_models_dir_name = 'fuel_models'
     worlds_dir_name = 'worlds'
-    default_world_file_name = 'hospital.world'    
+    default_world_file_name = 'hospital.world'
 
     # Path to the ROS-Gazebo bridge configuration file
     ros_gz_bridge_config_file_name = 'config/ros_gz_bridge.yaml'
@@ -42,10 +45,13 @@ def generate_launch_description():
     models_dir = os.path.join(world_pkg_share_dir, models_dir_name)
     fuel_models_dir = os.path.join(world_pkg_share_dir, fuel_models_dir_name)
 
+
     # Export GZ_SIM_RESOURCE_PATH
     # Without GZ_SIM_RESOURCE_PATH, Gazebo will not find the models and fuel models.
-    gz_resource_path = f"{models_dir}:{fuel_models_dir}:/opt/ros/jazzy/share"
+    # gz_resource_path = f"{models_dir}:{fuel_models_dir}:/opt/ros/jazzy/share"
+    gz_resource_path = f"{models_dir}:{fuel_models_dir}:{go1_pkg_share_dir}:/opt/ros/jazzy/share"
 
+    
     # Launch configuration variables
     robot_name = LaunchConfiguration('robot_name')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -162,6 +168,7 @@ def generate_launch_description():
         executable='parameter_bridge',
         parameters=[{
             'config_file': default_ros_gz_bridge_config_file,
+            'use_sim_time': use_sim_time # ### 수정됨: Bridge 노드에도 시간 동기화 적용
         }],
         output='screen'
     )
@@ -189,8 +196,8 @@ def generate_launch_description():
     )
 
     # Spawn the robot in Gazebo
-    # Based on the '/robot_description' topic, Gazebo will spawn the robot in the world.
-    # It also connect ROS2 joint command from the joint controllers to the motor topic in Gazebo.
+    # ros_gz_sim consumes the URDF from the robot_state_publisher parameter.
+    # It also connects ROS2 joint command from the joint controllers to the motor topic in Gazebo.
     start_gazebo_ros_spawner_cmd = Node(
         package='ros_gz_sim',
         executable='create',
@@ -205,13 +212,16 @@ def generate_launch_description():
             '-R', roll,
             '-P', pitch,
             '-Y', yaw
-        ])
+        ],
+        parameters=[{'use_sim_time': use_sim_time}] # ### 수정됨: Spawner에도 적용
+    )
 
     # Publish the pointcloud from the depth camera (face and top)
     go1_pointcloud_publisher_cmd = Node(
         package='go1_simulation',
         executable='publish_pointcloud.py',
         output='screen',
+        parameters=[{'use_sim_time': use_sim_time}] # ### 수정됨: 핵심! PointCloud 발행 시 시뮬레이션 시간 사용
     )        
         
     # Publish the GT pose of the robot
@@ -220,7 +230,10 @@ def generate_launch_description():
         package='go1_simulation',
         executable='go1_gt_pose_publisher.py',
         output='screen',
-        parameters=[{'comparison': False}],
+        parameters=[
+            {'comparison': False},
+            {'use_sim_time': use_sim_time} # ### 수정됨: GT Pose 발행 시 시뮬레이션 시간 사용
+        ],
         condition=IfCondition(use_gt_pose)
     )
 
@@ -250,8 +263,29 @@ def generate_launch_description():
     ld.add_action(start_gazebo_world_cmd)
     ld.add_action(start_gazebo_ros_bridge_cmd)
     ld.add_action(robot_state_publisher_cmd)
-    ld.add_action(load_controllers_cmd)
-    ld.add_action(start_gazebo_ros_spawner_cmd)
+    #ld.add_action(load_controllers_cmd)
+    # ld.add_action(start_gazebo_ros_spawner_cmd)
+
+    delayed_spawner_cmd = TimerAction(
+        period=20.0,
+        actions=[start_gazebo_ros_spawner_cmd]
+    )
+
+    delayed_load_controllers_cmd = TimerAction(
+        period=15.0, 
+        actions=[load_controllers_cmd]
+    )
+
+    post_spawn_event = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=start_gazebo_ros_spawner_cmd,
+            on_exit=[delayed_load_controllers_cmd] 
+        )
+    )
+    ld.add_action(delayed_spawner_cmd)
+    ld.add_action(post_spawn_event)
+
+    # -----------------------------------------------
     ld.add_action(go1_pointcloud_publisher_cmd)
     ld.add_action(go1_gt_pose_publisher_cmd)
 
