@@ -1,0 +1,209 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.7">
+  <world name="default">
+    <gravity>0 0 -9.8</gravity>
+    
+    <physics default="1" name="default_physics" type="dart">
+      <max_step_size>0.001</max_step_size>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    
+    <scene>
+      <ambient>0.3 0.3 0.3 1</ambient>
+      <background>0.7 0.8 0.9 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"></plugin>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"></plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"></plugin>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"></plugin>    
+    
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>1.0 0.95 0.9 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="aws_robomaker_hospital_floor_01_floor_1">
+      <include>
+        <uri>model://aws_robomaker_hospital_floor_01_floor</uri>
+        <static>true</static>
+        <pose>-0.001425 -0.014447 0 0 -0 0</pose>
+      </include>
+    </model>
+    
+    <model name="aws_robomaker_hospital_floor_01_walls_1">
+      <include>
+        <uri>model://aws_robomaker_hospital_floor_01_walls</uri>
+        <static>true</static>
+        <pose>-0.013823 -0.013783 0 0 -0 0</pose>
+      </include>
+    </model>
+    
+    <model name="aws_robomaker_hospital_floor_01_ceiling_1">
+      <include>
+        <uri>model://aws_robomaker_hospital_floor_01_ceiling</uri>
+        <static>true</static>
+        <pose>0.016552 0.050728 0 0 -0 0</pose>
+      </include>
+    </model>
+
+    <model name="sq1_s_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.5 2.0 0.15 0 0 1.57</pose></include></model>
+    <model name="sq1_s_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>2.5 2.0 0.19 0 0 1.57</pose></include></model>
+
+    <model name="sq1_s_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>3.5 2.0 0.15 0 0 1.57</pose></include></model>
+    <model name="sq1_s_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>3.5 2.0 0.19 0 0 1.57</pose></include></model>
+
+    <model name="sq1_s_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>4.5 2.0 0.15 0 0 1.57</pose></include></model>
+    <model name="sq1_s_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>4.5 2.0 0.19 0 0 1.57</pose></include></model>
+
+    <model name="sq1_s_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>5.5 2.0 0.15 0 0 1.57</pose></include></model>
+    <model name="sq1_s_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>5.5 2.0 0.19 0 0 1.57</pose></include></model>
+
+    <model name="sq1_s_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>6.5 2.0 0.15 0 0 1.57</pose></include></model>
+    <model name="sq1_s_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>6.5 2.0 0.19 0 0 1.57</pose></include></model>
+
+    <model name="sq1_s_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>7.5 2.0 0.15 0 0 1.57</pose></include></model>
+    <model name="sq1_s_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>7.5 2.0 0.19 0 0 1.57</pose></include></model>
+
+
+    <model name="sq1_e_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 2.5 0.25 0 0 3.14</pose></include></model>
+    <model name="sq1_e_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>8.0 2.5 0.29 0 0 3.14</pose></include></model>
+
+    <model name="sq1_e_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 3.5 0.25 0 0 3.14</pose></include></model>
+    <model name="sq1_e_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>8.0 3.5 0.29 0 0 3.14</pose></include></model>
+
+    <model name="sq1_e_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 4.5 0.25 0 0 3.14</pose></include></model>
+    <model name="sq1_e_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>8.0 4.5 0.29 0 0 3.14</pose></include></model>
+
+    <model name="sq1_e_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 5.5 0.25 0 0 3.14</pose></include></model>
+    <model name="sq1_e_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>8.0 5.5 0.29 0 0 3.14</pose></include></model>
+
+    <model name="sq1_e_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 6.5 0.25 0 0 3.14</pose></include></model>
+    <model name="sq1_e_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>8.0 6.5 0.29 0 0 3.14</pose></include></model>
+
+    <model name="sq1_e_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 7.5 0.25 0 0 3.14</pose></include></model>
+    <model name="sq1_e_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>8.0 7.5 0.29 0 0 3.14</pose></include></model>
+
+
+    <model name="sq1_n_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>7.5 8.0 0.35 0 0 -1.57</pose></include></model>
+    <model name="sq1_n_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>7.5 8.0 0.39 0 0 -1.57</pose></include></model>
+
+    <model name="sq1_n_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>6.5 8.0 0.35 0 0 -1.57</pose></include></model>
+    <model name="sq1_n_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>6.5 8.0 0.39 0 0 -1.57</pose></include></model>
+
+    <model name="sq1_n_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>5.5 8.0 0.35 0 0 -1.57</pose></include></model>
+    <model name="sq1_n_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>5.5 8.0 0.39 0 0 -1.57</pose></include></model>
+
+    <model name="sq1_n_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>4.5 8.0 0.35 0 0 -1.57</pose></include></model>
+    <model name="sq1_n_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>4.5 8.0 0.39 0 0 -1.57</pose></include></model>
+
+    <model name="sq1_n_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>3.5 8.0 0.35 0 0 -1.57</pose></include></model>
+    <model name="sq1_n_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>3.5 8.0 0.39 0 0 -1.57</pose></include></model>
+
+    <model name="sq1_n_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.5 8.0 0.35 0 0 -1.57</pose></include></model>
+    <model name="sq1_n_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>2.5 8.0 0.39 0 0 -1.57</pose></include></model>
+
+
+    <model name="sq1_w_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 7.5 0.45 0 0 0</pose></include></model>
+    <model name="sq1_w_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>2.0 7.5 0.49 0 0 0</pose></include></model>
+
+    <model name="sq1_w_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 6.5 0.45 0 0 0</pose></include></model>
+    <model name="sq1_w_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>2.0 6.5 0.49 0 0 0</pose></include></model>
+
+    <model name="sq1_w_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 5.5 0.45 0 0 0</pose></include></model>
+    <model name="sq1_w_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>2.0 5.5 0.49 0 0 0</pose></include></model>
+
+    <model name="sq1_w_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 4.5 0.45 0 0 0</pose></include></model>
+    <model name="sq1_w_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>2.0 4.5 0.49 0 0 0</pose></include></model>
+
+    <model name="sq1_w_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 3.5 0.45 0 0 0</pose></include></model>
+    <model name="sq1_w_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>2.0 3.5 0.49 0 0 0</pose></include></model>
+
+    <model name="sq1_w_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 2.5 0.45 0 0 0</pose></include></model>
+    <model name="sq1_w_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>2.0 2.5 0.49 0 0 0</pose></include></model>
+
+
+    <model name="sq2_s_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.5 -11.0 0.20 0 0 1.57</pose></include></model>
+    <model name="sq2_s_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>2.5 -11.0 0.24 0 0 1.57</pose></include></model>
+    <model name="sq2_s_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>3.5 -11.0 0.20 0 0 1.57</pose></include></model>
+    <model name="sq2_s_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>3.5 -11.0 0.24 0 0 1.57</pose></include></model>
+    <model name="sq2_s_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>4.5 -11.0 0.20 0 0 1.57</pose></include></model>
+    <model name="sq2_s_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>4.5 -11.0 0.24 0 0 1.57</pose></include></model>
+    <model name="sq2_s_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>5.5 -11.0 0.20 0 0 1.57</pose></include></model>
+    <model name="sq2_s_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>5.5 -11.0 0.24 0 0 1.57</pose></include></model>
+    <model name="sq2_s_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>6.5 -11.0 0.20 0 0 1.57</pose></include></model>
+    <model name="sq2_s_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>6.5 -11.0 0.24 0 0 1.57</pose></include></model>
+    <model name="sq2_s_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>7.5 -11.0 0.20 0 0 1.57</pose></include></model>
+    <model name="sq2_s_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>7.5 -11.0 0.24 0 0 1.57</pose></include></model>
+
+    <model name="sq2_e_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 -10.5 0.30 0 0 3.14</pose></include></model>
+    <model name="sq2_e_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>8.0 -10.5 0.34 0 0 3.14</pose></include></model>
+    <model name="sq2_e_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 -9.5 0.30 0 0 3.14</pose></include></model>
+    <model name="sq2_e_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>8.0 -9.5 0.34 0 0 3.14</pose></include></model>
+    <model name="sq2_e_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 -8.5 0.30 0 0 3.14</pose></include></model>
+    <model name="sq2_e_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>8.0 -8.5 0.34 0 0 3.14</pose></include></model>
+    <model name="sq2_e_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 -7.5 0.30 0 0 3.14</pose></include></model>
+    <model name="sq2_e_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>8.0 -7.5 0.34 0 0 3.14</pose></include></model>
+    <model name="sq2_e_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 -6.5 0.30 0 0 3.14</pose></include></model>
+    <model name="sq2_e_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>8.0 -6.5 0.34 0 0 3.14</pose></include></model>
+    <model name="sq2_e_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>8.0 -5.5 0.30 0 0 3.14</pose></include></model>
+    <model name="sq2_e_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>8.0 -5.5 0.34 0 0 3.14</pose></include></model>
+
+    <model name="sq2_n_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>7.5 -5.0 0.40 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>7.5 -5.0 0.44 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>6.5 -5.0 0.40 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>6.5 -5.0 0.44 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>5.5 -5.0 0.40 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>5.5 -5.0 0.44 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>4.5 -5.0 0.40 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>4.5 -5.0 0.44 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>3.5 -5.0 0.40 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>3.5 -5.0 0.44 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.5 -5.0 0.40 0 0 -1.57</pose></include></model>
+    <model name="sq2_n_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>2.5 -5.0 0.44 0 0 -1.57</pose></include></model>
+
+    <model name="sq2_w_1_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 -5.5 0.55 0 0 0</pose></include></model>
+    <model name="sq2_w_1_food"><include><uri>model://PizzaGood</uri><static>true</static><pose>2.0 -5.5 0.59 0 0 0</pose></include></model>
+    <model name="sq2_w_2_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 -6.5 0.55 0 0 0</pose></include></model>
+    <model name="sq2_w_2_food"><include><uri>model://PizzaBad</uri><static>true</static><pose>2.0 -6.5 0.59 0 0 0</pose></include></model>
+    <model name="sq2_w_3_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 -7.5 0.55 0 0 0</pose></include></model>
+    <model name="sq2_w_3_food"><include><uri>model://AppleGood</uri><static>true</static><pose>2.0 -7.5 0.59 0 0 0</pose></include></model>
+    <model name="sq2_w_4_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 -8.5 0.55 0 0 0</pose></include></model>
+    <model name="sq2_w_4_food"><include><uri>model://AppleBad</uri><static>true</static><pose>2.0 -8.5 0.59 0 0 0</pose></include></model>
+    <model name="sq2_w_5_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 -9.5 0.55 0 0 0</pose></include></model>
+    <model name="sq2_w_5_food"><include><uri>model://BananaGood</uri><static>true</static><pose>2.0 -9.5 0.59 0 0 0</pose></include></model>
+    <model name="sq2_w_6_dish"><include><uri>model://WhiteDish</uri><static>true</static><pose>2.0 -10.5 0.55 0 0 0</pose></include></model>
+    <model name="sq2_w_6_food"><include><uri>model://BananaBad</uri><static>true</static><pose>2.0 -10.5 0.59 0 0 0</pose></include></model>
+
+    <model name="grid_cone_01"><include><uri>model://blue_cone</uri><static>true</static><pose>-5.0 2.0 0 0 0 0</pose></include></model>
+    <model name="grid_cone_02"><include><uri>model://red_cone</uri><static>true</static><pose>-5.0 1.0 0 0 0 0</pose></include></model>
+    <model name="grid_cone_03"><include><uri>model://green_cone</uri><static>true</static><pose>-5.0 0.0 0 0 0 0</pose></include></model>
+    <model name="grid_cone_04"><include><uri>model://blue_cone</uri><static>true</static><pose>-5.0 -1.0 0 0 0 0</pose></include></model>
+    <model name="grid_cone_05"><include><uri>model://red_cone</uri><static>true</static><pose>-5.0 -2.0 0 0 0 0</pose></include></model>
+
+    <model name="grid_sign_01"><include><uri>model://circle_sign</uri><static>true</static><pose>-6.0 1.5 0 0 0 0</pose></include></model>
+    <model name="grid_box_01"><include><uri>model://box</uri><static>true</static><pose>-6.0 0.75 0.5 0 0 0</pose></include></model>
+    <model name="grid_sign_02"><include><uri>model://circle_sign</uri><static>true</static><pose>-6.0 0.0 0 0 0 0</pose></include></model>
+    <model name="grid_box_02"><include><uri>model://box</uri><static>true</static><pose>-6.0 -0.75 0.5 0 0 0</pose></include></model>
+    <model name="grid_sign_03"><include><uri>model://circle_sign</uri><static>true</static><pose>-6.0 -1.5 0 0 0 0</pose></include></model>
+
+    <model name="grid_scrub_01"><include><uri>model://Scrubs</uri><static>true</static><pose>-7.0 1.2 0 0 0 3.14</pose></include></model>
+    <model name="grid_scrub_02"><include><uri>model://Scrubs</uri><static>true</static><pose>-7.0 0.4 0 0 0 3.14</pose></include></model>
+    <model name="grid_scrub_03"><include><uri>model://Scrubs</uri><static>true</static><pose>-7.0 -0.4 0 0 0 3.14</pose></include></model>
+    <model name="grid_scrub_04"><include><uri>model://Scrubs</uri><static>true</static><pose>-7.0 -1.2 0 0 0 3.14</pose></include></model>
+
+  </world>
+</sdf>
