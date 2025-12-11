@@ -234,6 +234,10 @@ def generate_launch_description():
             {'comparison': False},
             {'use_sim_time': use_sim_time} # ### 수정됨: GT Pose 발행 시 시뮬레이션 시간 사용
         ],
+        remappings=[
+            ('/go1_pose_gt', '/go1_pose'),
+            ('/go1_pose_2d_gt', '/go1_pose_2d')
+        ],
         condition=IfCondition(use_gt_pose)
     )
 

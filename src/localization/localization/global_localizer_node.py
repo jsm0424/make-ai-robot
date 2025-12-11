@@ -35,7 +35,7 @@ class LocalizationNode(Node):
         self.declare_parameter('roll', 0.0)
         self.declare_parameter('pitch', 0.0)
         self.declare_parameter('yaw', 0.0)
-        self.declare_parameter('num_particles', 2000) # 파티클 수는 유지
+        self.declare_parameter('num_particles', 1000) # 파티클 수는 유지
         
         self.init_x = self.get_parameter('x').value
         self.init_y = self.get_parameter('y').value

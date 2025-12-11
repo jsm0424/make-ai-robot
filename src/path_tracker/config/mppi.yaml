@@ -36,8 +36,8 @@ path_tracker:
 
     subgoal_cost_weight: 0.0
     velocity_cost_weight: 0.0
-    heading_cost_weight: 0.0
-    map_cost_weight: 0.0
+    heading_cost_weight: 0.5
+    map_cost_weight: 1.0
     use_const: false    
     const_thres: 0.5
     tracking_thres: 5.0
@@ -47,7 +47,7 @@ path_tracker:
     # Path Tracking Parameters
     # ===========================================================================
     
-    target_speed: 0.5            # Target forward speed (m/s)
+    target_speed: 0.4            # Target forward speed (m/s)
     n_ind_search: 30             # Number of indices to search for nearest path point
     tracking_thres: 5.0          # Maximum tracking error threshold (m)
     goal_thres: 0.5              # Goal reached threshold (m)
@@ -73,7 +73,7 @@ path_tracker:
     wheelBase: 0.512             # Distance between front and rear (m)
     
     maxLinVel: 0.4               # Maximum linear velocity (m/s)
-    maxAngVel: 0.75              # Maximum angular velocity (rad/s)
+    maxAngVel: 0.6              # Maximum angular velocity (rad/s)
     
     # ===========================================================================
     # Coordinate Frames
