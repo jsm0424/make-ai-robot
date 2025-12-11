@@ -8,7 +8,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('perception')
     
     # 2. Build the path to the model file
-    model_path = os.path.join(pkg_share, 'models', 'last.pt')
+    model_path = os.path.join(pkg_share, 'models', 'food_model.pt')
 
     return LaunchDescription([
         Node(
