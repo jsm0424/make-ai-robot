@@ -10,10 +10,12 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(rclpy REQUIRED)
 
-# Install launch files
+# Install launch files and data directories
+# [Modified] Added 'models' here so it gets installed to share/language_command_handler/models
 install(DIRECTORY
   config
   launch
+  models
   language_command_handler
   DESTINATION share/${PROJECT_NAME}/
 )
@@ -22,6 +24,7 @@ install(DIRECTORY
 ament_python_install_package(${PROJECT_NAME})
 
 # Install Python executables
+# [Modified] Added 'mission5_empty_room_controller.py' to this list
 install(
   PROGRAMS
     language_command_handler/language_command_handler.py
@@ -32,6 +35,7 @@ install(
     language_command_handler/stop.py
     language_command_handler/mission3_cone_controller.py
     language_command_handler/smart_navigator.py
+    language_command_handler/mission5_empty_room_controller.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
