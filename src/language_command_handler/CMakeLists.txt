@@ -27,7 +27,8 @@ install(
     language_command_handler/language_command_handler.py
     language_command_handler/go_front.py
     language_command_handler/go_back.py
-    language_command_handler/navigate_to_toilet.py
+    language_command_handler/go_to_pose.py
+    language_command_handler/rotate.py
     language_command_handler/find_food.py
     language_command_handler/find_cone.py
     language_command_handler/push_box.py
