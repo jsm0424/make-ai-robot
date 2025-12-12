@@ -2,6 +2,7 @@
 #include <vector>
 #include <chrono>
 #include <cmath>
+#include <algorithm>
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
@@ -21,22 +22,23 @@ public:
   PathPlannerNode()
   : Node("path_planner_node")
   {
-    // Declare parameters
     this->declare_parameter<double>("resolution", 1.0);
-    this->declare_parameter<double>("robot_radius", 0.4); // Default 0.4m radius (approx for Go1)
-    
     resolution_ = this->get_parameter("resolution").as_double();
-    robot_radius_meters_ = this->get_parameter("robot_radius").as_double();
     
-    // Initialize
+    // 상태 변수 초기화
     has_map_ = false;
     has_goal_ = false;
     has_current_pose_ = false;
     goal_reached_ = false;
+
+    // QoS 설정 (Map은 Reliable & Transient Local 필수)
+    rclcpp::QoS map_qos_profile(10);
+    map_qos_profile.transient_local(); 
+    map_qos_profile.reliable();  
     
     // Subscribers
     map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-      "/map", 10,
+      "/map", map_qos_profile,
       std::bind(&PathPlannerNode::mapCallback, this, std::placeholders::_1));
     
     current_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -46,56 +48,44 @@ public:
     goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
       "/goal_pose", 10,
       std::bind(&PathPlannerNode::goalCallback, this, std::placeholders::_1));
-    
+
     // Publishers
     path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/local_path", 10);
     viz_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/path_markers", 10);
     goal_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("/goal_marker", 10);
     
-    RCLCPP_INFO(this->get_logger(), "Path Planner Node initialized");
-    RCLCPP_INFO(this->get_logger(), "Robot Radius: %.2f meters", robot_radius_meters_);
-    RCLCPP_INFO(this->get_logger(), "Use RViz2 '2D Goal Pose' tool to set a goal");
+    RCLCPP_INFO(this->get_logger(), "Path Planner: Static Map Mode Initialized");
   }
 
 private:
   void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   {
     map_msg_ = msg;
-    
-    // Convert OccupancyGrid to 2D vector
     int width = msg->info.width;
     int height = msg->info.height;
     
-    // Update resolution from map info if available
-    resolution_ = msg->info.resolution;
-
+    // 맵 데이터를 2차원 벡터로 변환 (0: Free, 1: Obstacle)
     map_grid_.clear();
     map_grid_.resize(height, std::vector<int>(width));
     
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         int index = y * width + x;
-        // OccupancyGrid: -1 (unknown), 0 (free), 100 (occupied)
-        // Convert to binary: 0 (free), 1 (occupied)
+        // OccupancyGrid 값: -1(Unknown), 0(Free), 100(Occupied)
         if (msg->data[index] > 50 || msg->data[index] < 0) {
-          map_grid_[y][x] = 1;  // obstacle
+          map_grid_[y][x] = 1; // 장애물
         } else {
-          map_grid_[y][x] = 0;  // free
+          map_grid_[y][x] = 0; // 이동 가능
         }
       }
     }
     
+    // A* 라이브러리에 지도 전달
     astar_.setMap(map_grid_);
-    
-    // NEW: Calculate radius in grid cells and set it in AStar
-    // We use ceil to ensure we cover the full radius, safer for collision avoidance
-    int radius_in_cells = std::ceil(robot_radius_meters_ / resolution_);
-    astar_.setRobotRadius(radius_in_cells);
-    
+
     if (!has_map_) {
       has_map_ = true;
-      RCLCPP_INFO(this->get_logger(), "Map received: %dx%d, Res: %.2f", width, height, resolution_);
-      RCLCPP_INFO(this->get_logger(), "Robot Radius in cells: %d", radius_in_cells);
+      RCLCPP_INFO(this->get_logger(), "Map received: %dx%d", width, height);
     }
   }
   
@@ -103,158 +93,111 @@ private:
   {
     if (!has_current_pose_) {
       has_current_pose_ = true;
-      current_pose_ = *msg;
       previous_pose_ = *msg;
-      RCLCPP_INFO(this->get_logger(), "Robot position initialized at (%.2f, %.2f)",
-        current_pose_.pose.position.x, current_pose_.pose.position.y);
-      return;
     }
-    
-    // Check if robot position actually changed
-    double dx = msg->pose.position.x - previous_pose_.pose.position.x;
-    double dy = msg->pose.position.y - previous_pose_.pose.position.y;
-    double distance = std::sqrt(dx * dx + dy * dy);
-    
-    // Only replan if position changed significantly (moved to new grid cell)
-    if (distance < 0.01) {  // Threshold for considering position unchanged
-      return;
-    }
-    
     current_pose_ = *msg;
-    
-    // Check if goal is reached
+
+    // 목표 지점에 도착했는지 확인 (거리 0.5m 이내)
     if (has_goal_) {
       double goal_dx = current_pose_.pose.position.x - goal_pose_.pose.position.x;
       double goal_dy = current_pose_.pose.position.y - goal_pose_.pose.position.y;
-      double goal_distance = std::sqrt(goal_dx * goal_dx + goal_dy * goal_dy);
+      double dist = std::sqrt(goal_dx * goal_dx + goal_dy * goal_dy);
       
-      if (goal_distance < 0.5) {  // Goal reached threshold
-        if (!goal_reached_) {
+      if (dist < 0.5 && !goal_reached_) {
           RCLCPP_INFO(this->get_logger(), "✓ Goal reached!");
           goal_reached_ = true;
-        }
-        return;  // Don't replan if goal is reached
       }
     }
     
-    RCLCPP_INFO(this->get_logger(), "Robot moved to (%.2f, %.2f)", 
-      current_pose_.pose.position.x, current_pose_.pose.position.y);
-    
-    // Store current position as previous for next comparison
-    previous_pose_ = current_pose_;
-    
-    // Replan path whenever robot position changes (and we have a goal)
-    if (has_map_ && has_goal_ && !goal_reached_) {
-      replanPath();
-    }
+    // Static Mode에서는 로봇이 움직인다고 경로를 재계산하지 않음 (replanPath 호출 X)
+    // 필요하다면 여기서 일정 거리 이상 움직였을 때 replanPath()를 호출할 수 있음.
   }
   
   void goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
   {
     goal_pose_ = *msg;
     has_goal_ = true;
-    goal_reached_ = false;  // Reset goal reached flag for new goal
+    goal_reached_ = false;
     
-    RCLCPP_INFO(this->get_logger(), 
-      "New goal received: (%.2f, %.2f)", 
-      goal_pose_.pose.position.x, 
-      goal_pose_.pose.position.y);
-    
-    // Publish goal marker for visualization
+    RCLCPP_INFO(this->get_logger(), "New goal received -> Planning Path...");
     publishGoalMarker();
     
-    // Plan path immediately when goal is set
+    // 목표가 들어오면 정적 맵 기반으로 경로 계산
     if (has_map_ && has_current_pose_) {
-      replanPath();
+      replanPath(); 
     }
   }
-  
+
+  geometry_msgs::msg::Quaternion createQuaternionMsgFromYaw(double yaw)
+  {
+    geometry_msgs::msg::Quaternion q;
+    q.x = 0.0; q.y = 0.0;
+    q.z = std::sin(yaw / 2.0); q.w = std::cos(yaw / 2.0);
+    return q;
+  }
+
   void replanPath()
   {
-    if (!has_map_ || !has_current_pose_ || !has_goal_) {
-      return;
-    }
+    if (!has_map_ || !has_current_pose_ || !has_goal_) return;
     
-    // Convert world coordinates to grid coordinates
-    astar_planner::GridCell start = worldToGrid(
-      current_pose_.pose.position.x,
-      current_pose_.pose.position.y);
+    // [중요] Scan 데이터 없이 기존 map_grid_를 그대로 사용
+    // mapCallback에서 이미 astar_.setMap(map_grid_)를 했지만 안전을 위해 확인
+    astar_.setMap(map_grid_);
     
-    astar_planner::GridCell goal = worldToGrid(
-      goal_pose_.pose.position.x,
-      goal_pose_.pose.position.y);
+    astar_planner::GridCell start = worldToGrid(current_pose_.pose.position.x, current_pose_.pose.position.y);
+    astar_planner::GridCell goal = worldToGrid(goal_pose_.pose.position.x, goal_pose_.pose.position.y);
     
-    // Find path using A*
+    // A* 실행
     auto path_cells = astar_.findPath(start, goal);
     
     if (path_cells.empty()) {
-      RCLCPP_WARN(this->get_logger(), "No path found! (Goal or Start might be too close to obstacle)");
+      RCLCPP_WARN(this->get_logger(), "No path found!");
       return;
     }
     
-    // Convert grid path to ROS Path message
+    // Path 메시지 생성
     nav_msgs::msg::Path path_msg;
     path_msg.header.stamp = this->now();
     path_msg.header.frame_id = "map";
     
-    // First waypoint is always current pose
-    geometry_msgs::msg::PoseStamped first_pose;
-    first_pose.header.stamp = this->now();
-    first_pose.header.frame_id = "map";
-    first_pose.pose = current_pose_.pose;
-    path_msg.poses.push_back(first_pose);
-    
-    // Add rest of the path (skip first cell if it's same as current position)
     for (size_t i = 0; i < path_cells.size(); ++i) {
       const auto& cell = path_cells[i];
-      
       auto world_pos = gridToWorld(cell.x, cell.y);
-      
-      // Skip if this waypoint is too close to current position
-      double dx = world_pos.first - current_pose_.pose.position.x;
-      double dy = world_pos.second - current_pose_.pose.position.y;
-      double dist = std::sqrt(dx * dx + dy * dy);
-      
-      if (i == 0 && dist < 0.3) {
-        continue;  // Skip first cell if robot is already there
-      }
-      
       geometry_msgs::msg::PoseStamped pose;
       pose.header.stamp = this->now();
       pose.header.frame_id = "map";
       pose.pose.position.x = world_pos.first;
       pose.pose.position.y = world_pos.second;
       pose.pose.position.z = 0.0;
-      pose.pose.orientation.w = 1.0;
       
+      // 경로의 방향(Orientation) 설정: 다음 점을 바라보도록 함
+      if(i < path_cells.size() - 1){
+        const auto& next_cell = path_cells[i+1];
+        auto next_world_pos = gridToWorld(next_cell.x, next_cell.y);
+        double dx = next_world_pos.first - world_pos.first;
+        double dy = next_world_pos.second - world_pos.second;
+        double yaw = std::atan2(dy, dx);
+        pose.pose.orientation = createQuaternionMsgFromYaw(yaw);
+      } else {
+        // 마지막 점은 목표 지점의 방향을 따름
+        pose.pose.orientation = goal_pose_.pose.orientation;
+      }
       path_msg.poses.push_back(pose);
     }
     
     path_pub_->publish(path_msg);
-    
-    // Publish visualization markers
     publishPathMarkers(path_cells);
-    
-    // Only log if path length changed significantly or first time
-    static size_t last_path_size = 0;
-    if (last_path_size == 0 || std::abs((int)path_cells.size() - (int)last_path_size) > 3) {
-      RCLCPP_INFO(this->get_logger(), "Path updated: %zu waypoints", path_cells.size());
-      last_path_size = path_cells.size();
-    }
+    RCLCPP_INFO(this->get_logger(), "Path planned successfully (%zu points)", path_cells.size());
   }
   
   astar_planner::GridCell worldToGrid(double x, double y)
   {
     astar_planner::GridCell cell;
-    
-    // Apply origin offset from map
     double origin_x = map_msg_->info.origin.position.x;
     double origin_y = map_msg_->info.origin.position.y;
     double resolution = map_msg_->info.resolution;
-    
     cell.x = static_cast<int>((x - origin_x) / resolution);
     cell.y = static_cast<int>((y - origin_y) / resolution);
-    
     return cell;
   }
   
@@ -263,18 +206,14 @@ private:
     double origin_x = map_msg_->info.origin.position.x;
     double origin_y = map_msg_->info.origin.position.y;
     double resolution = map_msg_->info.resolution;
-    
     double world_x = origin_x + (x + 0.5) * resolution;
     double world_y = origin_y + (y + 0.5) * resolution;
-    
     return {world_x, world_y};
   }
   
   void publishPathMarkers(const std::vector<astar_planner::GridCell>& path)
   {
     visualization_msgs::msg::MarkerArray marker_array;
-    
-    // Create line strip for path
     visualization_msgs::msg::Marker line_marker;
     line_marker.header.frame_id = "map";
     line_marker.header.stamp = this->now();
@@ -282,21 +221,15 @@ private:
     line_marker.id = 0;
     line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
     line_marker.action = visualization_msgs::msg::Marker::ADD;
-    line_marker.scale.x = 0.1;  // Line width
-    line_marker.color.r = 0.0;
-    line_marker.color.g = 1.0;
-    line_marker.color.b = 0.0;
-    line_marker.color.a = 1.0;
+    line_marker.scale.x = 0.1;
+    line_marker.color.r = 0.0; line_marker.color.g = 1.0; line_marker.color.b = 0.0; line_marker.color.a = 1.0;
     
     for (const auto& cell : path) {
       geometry_msgs::msg::Point p;
       auto world_pos = gridToWorld(cell.x, cell.y);
-      p.x = world_pos.first;
-      p.y = world_pos.second;
-      p.z = 0.1;
+      p.x = world_pos.first; p.y = world_pos.second; p.z = 0.1;
       line_marker.points.push_back(p);
     }
-    
     marker_array.markers.push_back(line_marker);
     viz_pub_->publish(marker_array);
   }
@@ -310,21 +243,9 @@ private:
     marker.id = 0;
     marker.type = visualization_msgs::msg::Marker::SPHERE;
     marker.action = visualization_msgs::msg::Marker::ADD;
-    
-    marker.pose.position.x = goal_pose_.pose.position.x;
-    marker.pose.position.y = goal_pose_.pose.position.y;
-    marker.pose.position.z = 0.5;
-    marker.pose.orientation.w = 1.0;
-    
-    marker.scale.x = 0.8;
-    marker.scale.y = 0.8;
-    marker.scale.z = 0.8;
-    
-    marker.color.r = 0.0;
-    marker.color.g = 0.0;
-    marker.color.b = 1.0;
-    marker.color.a = 0.8;
-    
+    marker.pose = goal_pose_.pose;
+    marker.scale.x = 0.8; marker.scale.y = 0.8; marker.scale.z = 0.8;
+    marker.color.r = 0.0; marker.color.g = 0.0; marker.color.b = 1.0; marker.color.a = 0.8;
     goal_marker_pub_->publish(marker);
   }
   
@@ -332,6 +253,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr current_pose_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
+  
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr viz_pub_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_marker_pub_;
@@ -343,6 +265,7 @@ private:
   bool goal_reached_;
   
   nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
+  
   geometry_msgs::msg::PoseStamped current_pose_;
   geometry_msgs::msg::PoseStamped previous_pose_;
   geometry_msgs::msg::PoseStamped goal_pose_;
@@ -350,9 +273,7 @@ private:
   std::vector<std::vector<int>> map_grid_;
   astar_planner::AStar astar_;
   
-  // Parameters
   double resolution_;
-  double robot_radius_meters_;
 };
 
 int main(int argc, char * argv[])

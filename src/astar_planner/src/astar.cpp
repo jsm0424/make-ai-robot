@@ -6,7 +6,7 @@ namespace astar_planner
 {
 
 AStar::AStar()
-: map_width_(0), map_height_(0), robot_radius_(0)
+: map_width_(0), map_height_(0)
 {
 }
 
@@ -23,47 +23,46 @@ void AStar::setMap(const std::vector<std::vector<int>>& map)
   }
 }
 
-// NEW: Set the physical radius of the robot (converted to grid cells)
-void AStar::setRobotRadius(int radius_in_cells)
-{
-  robot_radius_ = radius_in_cells;
-}
-
 double AStar::calculateHeuristic(const GridCell& a, const GridCell& b) const
 {
+  // Euclidean distance or Manhattan distance
   double dx = static_cast<double>(a.x - b.x);
   double dy = static_cast<double>(a.y - b.y);
   return std::sqrt(dx * dx + dy * dy);
 }
 
-// MODIFIED: Checks for collision considering the robot's radius
+// [수정된 isValid 함수]
 bool AStar::isValid(const GridCell& cell) const
 {
-  // 1. Check if the center is within map bounds
+  // 1. 맵 밖으로 나가는지 검사
   if (cell.x < 0 || cell.x >= map_width_ || cell.y < 0 || cell.y >= map_height_) {
     return false;
   }
 
-  // 2. Check collision for the robot's footprint
-  // We iterate through a square area around the center cell defined by robot_radius_
-  for (int dy = -robot_radius_; dy <= robot_radius_; ++dy) {
-    for (int dx = -robot_radius_; dx <= robot_radius_; ++dx) {
-      int check_x = cell.x + dx;
-      int check_y = cell.y + dy;
+  // 2. [추가됨] 안전 마진 (Safety Margin) 검사
+  // 로봇의 덩치를 고려해서 장애물 주변 몇 칸도 장애물로 취급합니다.
+  // 맵 해상도(resolution)가 0.05m라고 가정할 때:
+  // margin = 3 이면 -> 0.15m (약 15cm) 여유를 둠
+  // margin = 5 이면 -> 0.25m (약 25cm) 여유를 둠 (Go1 로봇에 추천)
+  int margin = 3; 
 
-      // Check if this part of the robot body is off the map
-      if (check_x < 0 || check_x >= map_width_ || check_y < 0 || check_y >= map_height_) {
-        return false;
-      }
+  for (int dy = -margin; dy <= margin; ++dy) {
+    for (int dx = -margin; dx <= margin; ++dx) {
+      int nx = cell.x + dx;
+      int ny = cell.y + dy;
 
-      // Check if this part of the robot body hits an obstacle
-      // 0 means free space, 1 means obstacle
-      if (map_[check_y][check_x] != 0) {
-        return false;
+      // 맵 범위 체크
+      if (nx >= 0 && nx < map_width_ && ny >= 0 && ny < map_height_) {
+        // 내 주변(margin 안쪽)에 장애물(1)이 하나라도 있으면
+        // 여기는 로봇 몸통이 닿을 위험이 있으므로 '못 가는 길'로 판단!
+        if (map_[ny][nx] == 1) {
+          return false; 
+        }
       }
     }
   }
 
+  // 주변에 장애물이 하나도 없으면 통과
   return true;
 }
 
@@ -85,7 +84,6 @@ std::vector<GridCell> AStar::getNeighbors(const GridCell& cell) const
   
   for (const auto& dir : directions) {
     GridCell neighbor = {cell.x + dir.first, cell.y + dir.second};
-    // isValid now handles the size check
     if (isValid(neighbor)) {
       neighbors.push_back(neighbor);
     }
@@ -115,6 +113,37 @@ std::vector<GridCell> AStar::reconstructPath(
   std::reverse(path.begin(), path.end());
   
   return path;
+}
+
+// [추가] 주변에 벽이 있으면 벌점(Penalty)을 부과하는 함수
+double AStar::calculateObstacleCost(const GridCell& cell)
+{
+  double penalty = 0.0;
+  int search_radius = 12; // 검사할 범위 (Hard Margin보다 커야 함)
+
+  for (int dy = -search_radius; dy <= search_radius; ++dy) {
+    for (int dx = -search_radius; dx <= search_radius; ++dx) {
+      int nx = cell.x + dx;
+      int ny = cell.y + dy;
+
+      // 맵 범위 체크
+      if (nx >= 0 && nx < map_width_ && ny >= 0 && ny < map_height_) {
+        // 만약 이 범위 안에 벽(1)이 있다면?
+        if (map_[ny][nx] == 1) {
+          // 거리 계산 (유클리드)
+          double dist = std::sqrt(dx*dx + dy*dy);
+          
+          // 벽이랑 가까울수록 벌점을 세게 줌! (거리가 0이면 무한대니까 예외처리)
+          if (dist > 0) {
+            // 20.0은 가중치 계수입니다. 
+            // 이 숫자가 클수록 로봇이 벽을 더 무서워해서 중앙으로 갑니다.
+            penalty += (100.0 / dist); 
+          }
+        }
+      }
+    }
+  }
+  return penalty;
 }
 
 std::vector<GridCell> AStar::findPath(const GridCell& start, const GridCell& goal)
@@ -185,7 +214,9 @@ std::vector<GridCell> AStar::findPath(const GridCell& start, const GridCell& goa
       double dx = static_cast<double>(neighbor.x - current.cell.x);
       double dy = static_cast<double>(neighbor.y - current.cell.y);
       double movement_cost = std::sqrt(dx * dx + dy * dy);
-      double tentative_g = current.g_cost + movement_cost;
+
+      double obstacle_penalty = calculateObstacleCost(neighbor);
+      double tentative_g = current.g_cost + movement_cost + obstacle_penalty;
       
       // Check if this path is better
       auto it = g_score.find(neighbor);

@@ -10,3 +10,6 @@ ros2 service call /language_command custom_interfaces/srv/LanguageCommand "{comm
 ros2 service call /language_command custom_interfaces/srv/LanguageCommand "{command: 'freeze'}"
 
 ros2 service call /language_command custom_interfaces/srv/LanguageCommand "{command: 'There is a bear behind you. You should run away'}"
+
+# Mission example (will start localization + planner + tracker + perception and move to toilet pose (9,11,0))
+ros2 service call /language_command custom_interfaces/srv/LanguageCommand "{command: 'I want to go to the toilet please'}"

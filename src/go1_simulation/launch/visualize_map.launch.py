@@ -21,7 +21,7 @@ def generate_launch_description():
 
     # Files
     slam_toolbox_config = os.path.join(pkg_share, 'config', 'slam_toolbox.yaml')
-    map_file = os.path.join(pkg_share, 'maps', 'hospital.yaml')  # hospital.yaml must exist
+    map_file = os.path.join(pkg_share, 'maps', 'my_world.yaml')  # hospital.yaml must exist
 
     # Arg: choose new map vs load existing
     generate_new_map = LaunchConfiguration('generate_new_map')

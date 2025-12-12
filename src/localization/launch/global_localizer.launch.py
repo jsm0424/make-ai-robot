@@ -24,7 +24,7 @@ def generate_launch_description():
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
 
-    num_particles = LaunchConfiguration('num_particles')
+    # num_particles = LaunchConfiguration('num_particles')
 
 
     # Declare launch arguments
@@ -42,8 +42,8 @@ def generate_launch_description():
             'x': x,
             'y': y,
             'z': z,
-            'yaw': yaw,
-            'num_particles': num_particles
+            'yaw': yaw
+            # 'num_particles': num_particles
         }]
     )
     
