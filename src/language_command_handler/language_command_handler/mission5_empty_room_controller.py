@@ -9,9 +9,8 @@ import cv2
 import math
 import time
 import os
-from ament_index_python.packages import get_package_share_directory # 패키지 경로 찾기용
+from ament_index_python.packages import get_package_share_directory
 
-# YOLO 로드 (없으면 에러 처리)
 try:
     from ultralytics import YOLO
 except ImportError:
@@ -21,13 +20,11 @@ class MissionEmptyRoomController(Node):
     def __init__(self):
         super().__init__('mission5_empty_room_controller')
 
-        # 1. 모델 경로 설정 (Launch 파일에서 받거나, 기본값은 패키지 내부 models 폴더)
-        # 패키지 설치 경로를 자동으로 찾습니다.
+        # 1. 모델 경로 설정
         try:
             pkg_share = get_package_share_directory('language_command_handler')
             default_model_path = os.path.join(pkg_share, 'models', 'sign_model.pt')
         except:
-            # 패키지를 못 찾을 경우 (테스트용)
             default_model_path = 'models/sign_model.pt'
 
         self.declare_parameter('model_path', default_model_path)
@@ -42,12 +39,19 @@ class MissionEmptyRoomController(Node):
             self.get_logger().error(f"❌ Failed to load model: {e}")
             self.model = None
 
-        # ================= 좌표 하드코딩 =================
-        self.CHECK_POSE = {'x': 3.76, 'y': 8.62, 'yaw': 0.6687}   # 확인 위치
-        self.ROOM_POSE = {'x': 7.0, 'y': 14.0, 'yaw': 1.57}      # 빈 방 (Sign 없을 때)
-        self.DETOUR_POSE_1 = {'x': 2.0, 'y': 10.0, 'yaw': 2.356} # 우회 1
-        self.DETOUR_POSE_2 = {'x': -7.0, 'y': 14.0, 'yaw': 1.57} # 우회 2 (최종)
-        # ===============================================
+        # ================= 좌표 설정 (수정됨) =================
+        # 1. 확인 위치 (Stop Sign 확인용)
+        self.CHECK_POSE = {'x': 3.76, 'y': 8.62, 'yaw': 0.6687}
+
+        # 2. [CASE 1: Sign 없을 때] -> 오른쪽 빈 방
+        self.ROOM_ENTRY_POSE = {'x': 6.66, 'y': 11.41, 'yaw': 1.57} # 문 앞 정렬
+        self.ROOM_INSIDE_POSE = {'x': 6.66, 'y': 13.3, 'yaw': 1.57}  # 방 안쪽
+
+        # 3. [CASE 2: Sign 있을 때] -> 왼쪽 빈 방 (우회)
+        self.DETOUR_WP1 = {'x': 2.0, 'y': 10.0, 'yaw': 2.356}        # 경유지 1
+        self.DETOUR_ENTRY_POSE = {'x': -6.66, 'y': 11.41, 'yaw': 1.57} # 문 앞 정렬
+        self.DETOUR_INSIDE_POSE = {'x': -6.66, 'y': 13.3, 'yaw': 1.57} # 방 안쪽
+        # ======================================================
 
         # 통신 설정
         self.nav_pub = self.create_publisher(PoseStamped, '/navigator/input_pose', 10)
@@ -57,52 +61,72 @@ class MissionEmptyRoomController(Node):
         self.bridge = CvBridge()
         self.cv_image = None
         
-        # 상태 관리
+        # 상태 관리 (State Machine)
+        # 0: 시작 -> 확인 위치 이동
+        # 1: 확인 위치 도착 -> 안정화
+        # 2: 이미지 분석
+        # [No Sign Branch]
+        # 10: 문 앞(ROOM_ENTRY) 이동 중
+        # 11: 문 앞 도착 -> 방 안(ROOM_INSIDE) 이동 중
+        # [Sign Detected Branch]
+        # 20: 우회지(DETOUR_WP1) 이동 중
+        # 21: 우회지 도착 -> 문 앞(DETOUR_ENTRY) 이동 중
+        # 22: 문 앞 도착 -> 방 안(DETOUR_INSIDE) 이동 중
+        # 5: 최종 완료
         self.step = 0 
-        self.is_nav_active = False
+        self.is_nav_active = False 
         
-        # 주기적 루프 실행
         self.create_timer(1.0, self.mission_loop)
-        
-        self.get_logger().info("🧠 Mission 5 Controller Started with Debug View.")
+        self.get_logger().info("🧠 Mission 5 Controller Updated (Door Entry Logic Added).")
 
     def status_callback(self, msg):
+        """Navigator 상태 수신"""
         if msg.data == "ARRIVED":
-            self.is_nav_active = False
+            self.is_nav_active = False # 명령 수행 완료, 다음 명령 가능 상태로 변경
+            
+            # [Step 0 -> 1] 확인 위치 도착
             if self.step == 0:
                 self.get_logger().info("✅ Arrived at Check Point.")
                 self.step = 1
-            elif self.step == 3:
-                self.get_logger().info("✅ Arrived at Empty Room (No Sign).")
+            
+            # [Step 10 -> 11] (No Sign) 문 앞 도착 -> 방 안으로 진입 명령
+            elif self.step == 10:
+                self.get_logger().info("✅ Arrived at Room Door. Entering...")
+                self.step = 11
+
+            # [Step 11 -> 5] (No Sign) 방 안 도착 -> 완료
+            elif self.step == 11:
+                self.get_logger().info("✅ Successfully Entered Empty Room.")
                 self.step = 5
-            elif self.step == 30:
+
+            # [Step 20 -> 21] (Sign) 경유지 도착 -> 문 앞으로 이동
+            elif self.step == 20:
                 self.get_logger().info("✅ Arrived at Detour Waypoint 1.")
-                self.step = 4
-            elif self.step == 4:
-                self.get_logger().info("✅ Arrived at Alternative Room.")
+                self.step = 21
+
+            # [Step 21 -> 22] (Sign) 문 앞 도착 -> 방 안으로 진입
+            elif self.step == 21:
+                self.get_logger().info("✅ Arrived at Detour Room Door. Entering...")
+                self.step = 22
+            
+            # [Step 22 -> 5] (Sign) 방 안 도착 -> 완료
+            elif self.step == 22:
+                self.get_logger().info("✅ Successfully Entered Detour Room.")
                 self.step = 5
 
     def img_callback(self, msg):
         try:
-            # 이미지 변환
             self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            
-            # [디버깅 화면] 모델이 로드되어 있다면 실시간 추론 결과를 화면에 표시
+            # 디버깅용 화면 표시 (옵션)
             if self.model is not None:
-                # YOLO 추론 (그림 그리기용, 속도를 위해 conf 낮게 설정 가능)
                 results = self.model(self.cv_image, verbose=False, conf=0.5)
-                
-                # 결과 이미지를 가져옴 (박스가 그려진 이미지)
                 annotated_frame = results[0].plot()
-                
-                # 화면에 띄우기
-                cv2.imshow("Mission5 Debug: Stop Sign Detection", annotated_frame)
+                cv2.imshow("Mission5 Debug", annotated_frame)
                 cv2.waitKey(1)
-                
-        except Exception as e:
-            self.get_logger().warn(f"Image Error: {e}")
+        except: pass
 
     def send_nav_command(self, pose_dict):
+        """좌표 전송 함수"""
         msg = PoseStamped()
         msg.header.frame_id = "map"
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -115,63 +139,68 @@ class MissionEmptyRoomController(Node):
         self.is_nav_active = True
 
     def detect_stop_sign(self):
-        """판단용 YOLO 감지 함수"""
-        if self.cv_image is None or self.model is None:
-            return False
-
-        # 추론 실행
+        if self.cv_image is None or self.model is None: return False
         results = self.model(self.cv_image, verbose=False)
-        
-        detected = False
         for result in results:
-            if len(result.boxes) > 0:
-                for box in result.boxes:
-                    conf = box.conf[0].item()
-                    cls = int(box.cls[0].item())
-                    
-                    # Stop Sign 감지 조건 (confidence > 0.5)
-                    # 만약 sign_model.pt가 stop sign만 학습했다면 cls 확인 불필요
-                    if conf > 0.5: 
-                        self.get_logger().info(f"🛑 Found Object! Conf: {conf:.2f}")
-                        detected = True
-                        break
-        return detected
+            for box in result.boxes:
+                if box.conf[0].item() > 0.5:
+                    return True
+        return False
 
     def mission_loop(self):
-        # Step 0: 이동
+        # [Step 0] 시작 -> 확인 위치로 이동
         if self.step == 0 and not self.is_nav_active:
             self.get_logger().info("Command: Move to Check Point")
             self.send_nav_command(self.CHECK_POSE)
-            self.is_nav_active = True
 
-        # Step 1: 안정화
+        # [Step 1] 도착함 -> 카메라 안정화 대기
         elif self.step == 1:
             self.get_logger().info("👀 Stabilizing Camera...")
             time.sleep(2.0)
             self.step = 2
 
-        # Step 2: 판단
+        # [Step 2] 이미지 분석 및 판단
         elif self.step == 2:
             has_sign = self.detect_stop_sign()
+            
             if has_sign:
-                self.get_logger().info("🛑 STOP SIGN DETECTED! Detouring...")
-                self.send_nav_command(self.DETOUR_POSE_1)
-                self.step = 30
+                self.get_logger().info("🛑 STOP SIGN DETECTED! Taking Detour Path.")
+                # 우회 경로 시작 (경유지 1로 이동)
+                self.step = 20 
             else:
-                self.get_logger().info("🟢 No Sign. Entering Room...")
-                self.send_nav_command(self.ROOM_POSE)
-                self.step = 3
+                self.get_logger().info("🟢 No Sign. Proceeding to Room.")
+                # 일반 경로 시작 (문 앞으로 이동)
+                self.step = 10
 
-        # Step 4: 최종 이동
-        elif self.step == 4 and not self.is_nav_active:
-            self.get_logger().info("Command: Move to Final Destination")
-            self.send_nav_command(self.DETOUR_POSE_2)
-            self.is_nav_active = True
+        # [Step 10] (No Sign) 문 앞으로 이동 명령
+        elif self.step == 10 and not self.is_nav_active:
+            self.get_logger().info("Command: Move to Door Front (Right Room)")
+            self.send_nav_command(self.ROOM_ENTRY_POSE)
 
-        # Step 5: 완료
+        # [Step 11] (No Sign) 방 안으로 이동 명령 (도착 후 실행됨)
+        elif self.step == 11 and not self.is_nav_active:
+            self.get_logger().info("Command: Enter Room (Straight Line)")
+            self.send_nav_command(self.ROOM_INSIDE_POSE)
+
+        # [Step 20] (Sign) 경유지로 이동 명령
+        elif self.step == 20 and not self.is_nav_active:
+            self.get_logger().info("Command: Move to Detour Waypoint 1")
+            self.send_nav_command(self.DETOUR_WP1)
+
+        # [Step 21] (Sign) 문 앞으로 이동 명령
+        elif self.step == 21 and not self.is_nav_active:
+            self.get_logger().info("Command: Move to Door Front (Left Room)")
+            self.send_nav_command(self.DETOUR_ENTRY_POSE)
+
+        # [Step 22] (Sign) 방 안으로 이동 명령
+        elif self.step == 22 and not self.is_nav_active:
+            self.get_logger().info("Command: Enter Detour Room (Straight Line)")
+            self.send_nav_command(self.DETOUR_INSIDE_POSE)
+
+        # [Step 5] 완료
         elif self.step == 5:
-            self.get_logger().info("🎉 Mission Complete!")
-            self.step = 6
+            self.get_logger().info("🎉 Mission 5 Complete!")
+            self.step = 6 # 루프 종료
 
 def main(args=None):
     rclpy.init(args=args)
@@ -181,7 +210,6 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        # 종료 시 cv창 닫기
         cv2.destroyAllWindows()
         node.destroy_node()
         rclpy.shutdown()
