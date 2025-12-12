@@ -23,15 +23,20 @@ def generate_launch_description():
     y = LaunchConfiguration('y')
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
-
-    # num_particles = LaunchConfiguration('num_particles')
-
+    use_sim_time = LaunchConfiguration('use_sim_time')
 
     # Declare launch arguments
     declare_x_cmd = DeclareLaunchArgument('x', default_value='0.0')
     declare_y_cmd = DeclareLaunchArgument('y', default_value='1.0')
     declare_z_cmd = DeclareLaunchArgument('z', default_value='0.5')
     declare_yaw_cmd = DeclareLaunchArgument('yaw', default_value='0.0')
+    
+
+    declare_use_sim_time_cmd = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation (Gazebo) clock if true'
+    )
 
     global_localizer_node = Node(
         package='localization',
@@ -42,8 +47,8 @@ def generate_launch_description():
             'x': x,
             'y': y,
             'z': z,
-            'yaw': yaw
-            # 'num_particles': num_particles
+            'yaw': yaw,
+            'use_sim_time': use_sim_time
         }]
     )
     
@@ -52,6 +57,8 @@ def generate_launch_description():
     ld.add_action(declare_y_cmd)
     ld.add_action(declare_z_cmd)
     ld.add_action(declare_yaw_cmd)
+    ld.add_action(declare_use_sim_time_cmd)
+
     ld.add_action(global_localizer_node)
 
     return ld

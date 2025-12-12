@@ -112,13 +112,13 @@
 
     <!-- MISSION 5 -->
   
-    <model name="box_1">
+    <!-- <model name="box_1">
       <include>
         <uri>model://box</uri>
         <static>false</static>
         <pose>2 12.0 0.5 0 0 0</pose>
       </include>
-    </model>
+    </model> -->
 
     <model name="goal_line_box">
       <static>true</static>
