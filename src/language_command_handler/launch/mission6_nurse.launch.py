@@ -8,7 +8,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     # 패키지 이름과 모델 파일명 확인 (사용자 환경에 맞게 수정!)
     package_name = 'language_command_handler' 
-    model_filename = 'yolov8n.pt'
+    model_filename = 'nurse_model.pt'
     
     # 모델 파일 경로 자동 탐색
     try:

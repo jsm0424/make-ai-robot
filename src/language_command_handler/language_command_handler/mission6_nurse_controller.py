@@ -23,7 +23,7 @@ class Mission6NurseController(Node):
         # === [1. 모델 경로 자동 설정] ===
         # 본인의 패키지 이름으로 꼭 수정하세요! (예: 'go1_simulation' 등)
         package_name = 'language_command_handler' 
-        model_filename = 'yolov8n.pt' # 사용할 모델 파일명
+        model_filename = 'nurse_model.pt' # 사용할 모델 파일명
         
         try:
             pkg_share = get_package_share_directory(package_name)
