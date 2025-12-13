@@ -33,7 +33,10 @@ install(
     language_command_handler/go_to_pose.py
     language_command_handler/rotate.py
     language_command_handler/stop.py
+    language_command_handler/mission1_toilet_controller.py
     language_command_handler/mission3_cone_controller.py
+    language_command_handler/mission4_box_controller.py
+    language_command_handler/mission5_empty_room_controller.py
     language_command_handler/smart_navigator.py
     language_command_handler/mission5_empty_room_controller.py
   DESTINATION lib/${PROJECT_NAME}
