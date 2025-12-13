@@ -112,15 +112,15 @@
 
     <!-- MISSION 5 -->
   
-    <model name="box_1">
+    <!-- <model name="box_1">
       <include>
         <uri>model://box</uri>
         <static>false</static>
         <pose>2 12.0 0.5 0 0 0</pose>
       </include>
-    </model>
+    </model> -->
 
-    <!-- <model name="box_2">
+    <model name="box_2">
       <include>
         <uri>model://box</uri>
         <static>false</static>
@@ -128,7 +128,7 @@
       </include>
     </model>
 
-    <model name="box_3">
+    <!-- <model name="box_3">
       <include>
         <uri>model://box</uri>
         <static>false</static>

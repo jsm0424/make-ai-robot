@@ -90,14 +90,10 @@ class MissionEmptyRoomController(Node):
                 self.step = 5
 
     def img_callback(self, msg):
-        # [NEW] detection_enabled가 False면 이미지 처리 자체를 건너뜀 (CPU 절약)
-        if not self.detection_enabled:
-            return
-
+        """카메라 영상 처리 및 디버깅 화면"""
         try:
             self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            
-            # 디버깅 화면도 활성화 상태일 때만 갱신
+            # 디버깅용 화면 표시 (옵션)
             if self.model is not None:
                 results = self.model(self.cv_image, verbose=False, conf=0.5)
                 annotated_frame = results[0].plot()
