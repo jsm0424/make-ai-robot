@@ -13,8 +13,9 @@ def generate_launch_description():
     default_model_path = os.path.join(pkg_share, 'models', 'nurse_model.pt')
 
     use_sim_time_arg = DeclareLaunchArgument(
-        'use_sim_time', default_value='true',
-        description='Use simulation (Gazebo) clock'
+        'use_sim_time', 
+        default_value='true',
+        description='Use simulation (Gazebo) clock if true'
     )
     
     use_sim_time_arg = DeclareLaunchArgument('use_sim_time', default_value='false')

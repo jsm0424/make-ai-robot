@@ -16,9 +16,9 @@ try:
 except ImportError:
     print("❌ Ultralytics library not found.")
 
-class Mission6DynamicController(Node):
+class Mission6NurseController(Node):
     def __init__(self):
-        super().__init__('mission6_dynamic_controller')
+        super().__init__('mission6_nurse_controller')
 
         # === [설정] ===
         self.ROOM_ENTRANCE = {'x': -6.68, 'y': -24.92, 'yaw': -3.13}
@@ -81,6 +81,7 @@ class Mission6DynamicController(Node):
                 self.state = 2
 
     def img_callback(self, msg):
+        """카메라 영상 처리 및 디버깅 화면"""
         try:
             self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
             # 디버깅용 화면 표시 (옵션)
@@ -209,6 +210,7 @@ class Mission6DynamicController(Node):
         if self.state == 0:
             self.send_nav_command(self.ROOM_ENTRANCE)
             self.state = 1
+            self.fail_count = 0
 
         elif self.state == 1: pass 
 
@@ -248,10 +250,15 @@ class Mission6DynamicController(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = Mission6DynamicController()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    node = Mission6NurseController()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        cv2.destroyAllWindows()
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
