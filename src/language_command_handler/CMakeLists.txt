@@ -36,7 +36,6 @@ install(
     language_command_handler/smart_navigator.py
     language_command_handler/mission1_toilet_controller.py
     language_command_handler/mission3_cone_controller.py
-    language_command_handler/smart_navigator.py
     language_command_handler/mission5_empty_room_controller.py
     language_command_handler/mission6_nurse_controller.py
   DESTINATION lib/${PROJECT_NAME}
