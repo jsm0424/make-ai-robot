@@ -40,6 +40,9 @@ class MissionConeController(Node):
 
         self.bridge = CvBridge()
         self.cv_image = None
+
+        self.start_delay = 0 # 워밍업 카운터
+        self.robot_pose = None
         
         # 상태: 0(준비), 1(관측이동), 2(관측도착), 3(분석), 4(최종이동), 5(완료)
         self.step = 0 
@@ -129,9 +132,9 @@ class MissionConeController(Node):
         return detected
 
     def mission_loop(self):
-        if self.robot_pose is None:
-            self.get_logger().info("⏳ Waiting for robot pose...", throttle_duration_sec=2.0)
-            return
+        # if self.robot_pose is None:
+        #     self.get_logger().info("⏳ Waiting for robot pose...", throttle_duration_sec=2.0)
+        #     return
         
         # 4초간 대기하며 시스템 안정화 (시작하자마자 멈추는 현상 방지)
         if self.start_delay < 8: # 0.5초 * 8 = 4초

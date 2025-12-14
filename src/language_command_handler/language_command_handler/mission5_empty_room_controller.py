@@ -73,6 +73,9 @@ class MissionEmptyRoomController(Node):
         self.current_path = [] 
         self.path_index = 0    
 
+        self.start_delay = 0 # 워밍업 카운터
+        self.robot_pose = None
+
         self.create_timer(0.5, self.control_loop)
         self.get_logger().info("🚀 Mission 5 Controller Started (Logic Fixed!)")
 
@@ -123,9 +126,9 @@ class MissionEmptyRoomController(Node):
         self.get_logger().info(f"📍 Moving to: {pose_dict['x']}, {pose_dict['y']}")
 
     def control_loop(self):
-        if self.robot_pose is None:
-            self.get_logger().info("⏳ Waiting for robot pose...", throttle_duration_sec=2.0)
-            return
+        # if self.robot_pose is None:
+        #     self.get_logger().info("⏳ Waiting for robot pose...", throttle_duration_sec=2.0)
+        #     return
         
         # 4초간 대기하며 시스템 안정화 (시작하자마자 멈추는 현상 방지)
         if self.start_delay < 8: # 0.5초 * 8 = 4초
@@ -134,7 +137,7 @@ class MissionEmptyRoomController(Node):
                 self.get_logger().info(f"⏳ System Warming up... {self.start_delay}/8")
             return
         
-        
+
         # [State 0] 시작
         if self.state == 0:
             if self.nav_pub.get_subscription_count() == 0:

@@ -21,19 +21,19 @@ class MissionBoxController(Node):
 
         self.WAYPOINTS = {
             'LEFT':   [{'x': -3.0, 'y': 10.0, 'yaw': 1.57}],
-            'CENTER': [{'x': -1.0, 'y': 9.0, 'yaw': 1.57}, {'x': -1.0, 'y': 15.0, 'yaw': 0.0}],
+            'CENTER': [{'x': 1.0, 'y': 9.0, 'yaw': 1.57}, {'x': 1.0, 'y': 15.0, 'yaw': 3.141592}],
             'RIGHT':  [{'x': 3.0, 'y': 10.0, 'yaw': 1.57}]
         }
 
         self.PUSH_READY_POSES = {
             'LEFT':   {'x': -3.0, 'y': 12.0, 'yaw': 0.0},
-            'CENTER': {'x': 0.15,  'y': 15.0, 'yaw': -1.57},
+            'CENTER': {'x': 0.2,  'y': 15.0, 'yaw': -1.57},
             'RIGHT':  {'x': 3.0,  'y': 12.0, 'yaw': 3.141592}
         }
 
         self.GOAL_ZONE_POSES = {
             'LEFT':   {'x': -0.6, 'y': 12.0, 'yaw': 0.0}, 
-            'CENTER': {'x': 0.0,  'y': 12.5, 'yaw': -1.57},
+            'CENTER': {'x': -0.2,  'y': 12.5, 'yaw': -1.57},
             'RIGHT':  {'x': 0.6,  'y': 12.0, 'yaw': 3.141592}
         }
         # ==============
@@ -49,7 +49,7 @@ class MissionBoxController(Node):
 
         self.bridge = CvBridge()
         self.cv_image = None
-        self.robot_pose = None
+        
 
         self.step = 0 
         self.target_box_loc = None 
@@ -58,6 +58,7 @@ class MissionBoxController(Node):
         # 후진 거리 계산을 위한 변수
         self.start_back_pose = None
         self.start_delay = 0 # 워밍업 카운터
+        self.robot_pose = None
 
         self.current_target_pose = None
 

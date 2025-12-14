@@ -53,20 +53,33 @@ class SmartNavigator(Node):
         return angle
 
     def rotate_to_target_yaw(self, target_yaw):
-        """특정 Yaw 각도를 바라보도록 회전"""
+        """
+        [수정됨] 로봇의 안정성을 위해 전진 속도를 섞어서 회전
+        """
         if self.robot_pose is None: return False
         
         curr_yaw = self.quaternion_to_yaw(self.robot_pose.pose.orientation)
         error = self.normalize_angle(target_yaw - curr_yaw)
         
-        # 오차가 3도(0.05rad) 이내면 성공
+        # 오차가 3도(0.05rad) 이내면 성공 -> 정지
         if abs(error) < 0.05:
-            self.cmd_vel_pub.publish(Twist()) # 정지
+            stop_cmd = Twist()
+            # 정지할 때는 확실하게 0.0으로 줌
+            stop_cmd.linear.x = 0.0
+            stop_cmd.angular.z = 0.0
+            self.cmd_vel_pub.publish(stop_cmd)
             return True
         
-        # P제어 회전
+        # 회전 제어
         cmd = Twist()
-        cmd.angular.z = max(min(error * 1.5, 0.6), -0.6)
+        
+        # 1. 각속도 (Angular Z) 계산
+        # 너무 빠르면 불안정하므로 최대 속도를 0.4~0.5 정도로 낮추는 것도 방법입니다.
+        # 기존: 0.6 -> 수정: 0.5 (약간 부드럽게)
+        cmd.angular.z = max(min(error * 1.5, 0.8), -0.8)
+        
+        cmd.linear.x = 0.05 
+
         self.cmd_vel_pub.publish(cmd)
         return False
 

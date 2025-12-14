@@ -148,7 +148,7 @@ class Mission2FoodController(Node):
         for c in coords_list:
             is_duplicate = False
             for existing in filtered:
-                dist = math.hypot(c[0] - existing[0], c[1] - existing[1])
+                dist = math.hypot(c[0] - existing['x'], c[1] - existing['y'])
                 if dist < 0.5: # 0.5m threshold
                     is_duplicate = True
                     break
