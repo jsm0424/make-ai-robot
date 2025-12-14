@@ -42,7 +42,6 @@ class Mission2FoodController(Node):
             (4.74, -27.36, -2.09), (7.97, -27.44, -3.10), (-1.61, -27.10, -1.56),
         ]
 
-        # Logic: Filter duplicates & Init Strategy
         self.strat_2_coords = self.filter_coordinates(raw_strat_2)
         self.strat_1_coords = self.filter_coordinates(raw_strat_1)
         
@@ -96,7 +95,7 @@ class Mission2FoodController(Node):
         self.target_class_name = None 
 
         self.create_timer(0.1, self.mission_loop)
-        self.get_logger().info("🍔 Mission 2: Check & Skip Mode")
+        self.get_logger().info("🍔 Mission 2: Low-Res Debug Mode")
 
     def filter_coordinates(self, coords_list):
         filtered = []
@@ -124,7 +123,7 @@ class Mission2FoodController(Node):
             self.is_navigating = False
             if self.state == 1:
                 self.get_logger().info("📍 Arrived. Checking View...")
-                self.set_sleep(1.5) # Wait for camera to stabilize
+                self.set_sleep(1.5)
                 self.state = 2
 
     def set_sleep(self, seconds):
@@ -157,6 +156,7 @@ class Mission2FoodController(Node):
             return float(val)
         except: return 99.9
 
+    # === [UPDATED] Detection with Low-Res Debug ===
     def process_food_detection(self):
         if self.cv_image is None or self.model is None: return False, 0.0, 99.9, None
 
@@ -181,6 +181,18 @@ class Mission2FoodController(Node):
                         best_box = box
                         detected_class = cls_name
         
+        # --- Visualization Logic ---
+        # 1. Draw on original size first (Cleanest text)
+        debug_img = self.cv_image.copy()
+        
+        # Draw Status Overlay (Top Left)
+        state_str = ["Move", "Wait", "Check", "Approach", "Decide", "Done"][min(self.state, 5)]
+        cv2.putText(debug_img, f"State: {state_str}", (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)
+
+        error_x = 0.0
+        dist = 99.9
+
         if best_box:
             x1, y1, x2, y2 = map(int, best_box.xyxy[0].tolist())
             cx = int((x1 + x2) / 2)
@@ -188,17 +200,29 @@ class Mission2FoodController(Node):
             dist = self.get_depth_dist(cx, cy)
             error_x = center_x_screen - cx
 
+            # Draw Box & Info
             color = (0, 255, 0) if detected_class in self.EDIBLE_FOODS else (0, 0, 255)
-            cv2.rectangle(self.cv_image, (x1,y1), (x2,y2), color, 2)
-            cv2.putText(self.cv_image, f"{detected_class} {max_conf:.2f} {dist:.2f}m", (x1, y1-10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            cv2.imshow("Food Search", self.cv_image)
-            cv2.waitKey(1)
-            return True, error_x, dist, detected_class
+            cv2.rectangle(debug_img, (x1,y1), (x2,y2), color, 3)
+            label = f"{detected_class} {dist:.2f}m"
+            cv2.putText(debug_img, label, (x1, y1-10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+            
+            # Draw Center Line
+            cv2.line(debug_img, (cx, y1), (cx, y2), (255, 0, 0), 2)
+            cv2.line(debug_img, (int(center_x_screen), 0), (int(center_x_screen), 480), (100, 100, 100), 1)
 
-        cv2.imshow("Food Search", self.cv_image)
+            result = (True, error_x, dist, detected_class)
+        else:
+            cv2.putText(debug_img, "No Food Detected", (10, 70), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+            result = (False, 0.0, 99.9, None)
+
+        # 2. Resize to Low-Res (320x240) for fast display
+        small_debug = cv2.resize(debug_img, (320, 240))
+        cv2.imshow("Food Search (LowRes)", small_debug)
         cv2.waitKey(1)
-        return False, 0.0, 99.9, None
+        
+        return result
 
     def mission_loop(self):
         if self.robot_pose is None: return
@@ -224,52 +248,44 @@ class Mission2FoodController(Node):
 
         elif self.state == 1: pass 
 
-        # [State 2] Check View (No Blind Rotation)
+        # [State 2] Check View
         elif self.state == 2:
             detected, error_x, dist, cls_name = self.process_food_detection()
 
             if detected:
-                # Food found! Start Centering
                 self.target_class_name = cls_name
-                
                 if abs(error_x) < self.CENTER_TOLERANCE:
                     self.cmd_vel_pub.publish(Twist()) 
                     self.get_logger().info(f"🎯 Locked: {cls_name} at {dist:.2f}m")
-                    self.state = 3 # Go to Approach
+                    self.state = 3 
                 else:
-                    # Visual Servoing (Rotate to Center)
-                    # Left (error_x > 0) -> Positive Yaw -> Correct
                     raw_z = error_x * self.P_GAIN
                     if raw_z > 0: ang_z = min(raw_z, self.MAX_ROT_SPEED)
                     else: ang_z = max(raw_z, -self.MAX_ROT_SPEED)
-                    
                     cmd = Twist()
                     cmd.angular.z = float(ang_z)
                     self.cmd_vel_pub.publish(cmd)
             else:
-                # [FIX] No Food Found -> Skip Rotation -> Next Coordinate
-                self.get_logger().info("❌ No food in view. Skipping to next.")
-                self.cmd_vel_pub.publish(Twist()) # Ensure stop
+                self.get_logger().info("❌ No food in view. Skipping.")
+                self.cmd_vel_pub.publish(Twist()) 
                 self.location_idx += 1
                 self.state = 0
 
-        # [State 3] Approach (Distance Check happens here)
+        # [State 3] Approach
         elif self.state == 3:
             detected, error_x, dist, cls_name = self.process_food_detection()
 
             if not detected:
-                self.get_logger().warn("⚠️ Lost target while approaching! Skipping.")
+                self.get_logger().warn("⚠️ Lost target! Skipping.")
                 self.cmd_vel_pub.publish(Twist())
-                self.location_idx += 1 # Or you could set state=2 to try finding it again
+                self.location_idx += 1
                 self.state = 0
                 return
 
             cmd = Twist()
-            # Keep centering while moving
             ang_z = error_x * self.P_GAIN
             cmd.angular.z = float(np.clip(ang_z, -0.3, 0.3))
 
-            # Move forward until 0.6m
             if dist > self.APPROACH_DIST:
                 cmd.linear.x = 0.3 
             else:
