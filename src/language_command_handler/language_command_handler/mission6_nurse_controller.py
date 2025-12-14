@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseStamped, Twist
 from std_msgs.msg import String
-from sensor_msgs.msg import Image, LaserScan
+from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 import math
 import time
 import os
+import numpy as np 
 from ament_index_python.packages import get_package_share_directory
 
 try:
@@ -20,15 +22,15 @@ class Mission6NurseController(Node):
     def __init__(self):
         super().__init__('mission6_nurse_controller')
 
-        # === [설정] ===
-        self.ROOM_ENTRANCE = {'x': -6.68, 'y': -24.92, 'yaw': -3.13}
+        # === [Settings] ===
+        self.ROOM_ENTRANCE = {'x': -5.93, 'y': -24.92, 'yaw': -3.13}
         
-        # [거리 설정]
-        self.APPROACH_DIST = 0.6  # 1차 접근 거리 (가까이 붙기)
-        self.TARGET_RADIUS = 0.7  # 최종 공전 반지름 (뒤로 물러날 거리)
-        self.SIDE_SPEED    = -0.3 # 공전 속도
+        # [Precision Settings]
+        self.CENTER_TOLERANCE = 10   # [Modified] Tighter margin (10 pixels)
+        self.P_GAIN = 0.0015         # [Modified] Slower reaction speed
+        self.MAX_ROT_SPEED = 0.3     # [Modified] Safety speed cap (rad/s)
 
-        # 모델 경로
+        # Model Path
         try:
             pkg_share = get_package_share_directory('language_command_handler')
             default_model_path = os.path.join(pkg_share, 'models', 'nurse_model.pt')
@@ -38,37 +40,38 @@ class Mission6NurseController(Node):
         self.declare_parameter('model_path', default_model_path)
         self.model = YOLO(self.get_parameter('model_path').value)
 
-        # 통신
+        # Communication
         self.nav_pub = self.create_publisher(PoseStamped, '/navigator/input_pose', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.nav_sub = self.create_subscription(String, '/navigator/status', self.status_callback, 10)
         self.pose_sub = self.create_subscription(PoseStamped, '/go1_pose', self.pose_callback, 10)
-        self.img_sub = self.create_subscription(Image, '/camera_face/image', self.img_callback, 10)
-        self.scan_sub = self.create_subscription(LaserScan, '/scan', self.scan_callback, 10)
         self.speech_pub = self.create_publisher(String, '/robot_dog/speech', 10)
+
+        qos_policy = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=1)
+        self.img_sub = self.create_subscription(Image, '/camera_face/image', self.img_callback, 10)
+        self.depth_sub = self.create_subscription(Image, '/camera_face/depth', self.depth_callback, qos_policy)
 
         self.bridge = CvBridge()
         self.cv_image = None
-        self.latest_scan = None
+        self.latest_depth_image = None
         
         self.robot_pose = None
         self.rx = 0.0
         self.ry = 0.0
         self.ryaw = 0.0
 
-        self.nurse_x = 0.0
-        self.nurse_y = 0.0
+        self.nurse_global_x = 0.0
+        self.nurse_global_y = 0.0
         
-        # 상태: 0(이동) -> 2(접근 0.6m) -> 2.5(후진 0.8m) -> 3(계산) -> 4(공전)
+        self.waypoints = []
+        self.current_waypoint_idx = 0
         self.state = 0
-        self.orbit_start_time = 0.0
-        
-        # 안정성을 위한 Non-blocking Sleep 변수
         self.start_delay = 0 
         self.wait_until_time = 0.0
+        self.is_navigating = False
 
         self.create_timer(0.1, self.mission_loop)
-        self.get_logger().info("🧠 Mission 6: Approach(0.6) -> Back(0.8) -> Orbit Started!")
+        self.get_logger().info("🧠 Mission 6: High Precision Mode")
 
     def pose_callback(self, msg):
         self.robot_pose = msg
@@ -77,115 +80,132 @@ class Mission6NurseController(Node):
         q = msg.pose.orientation
         self.ryaw = math.atan2(2*(q.w*q.z + q.x*q.y), 1-2*(q.y*q.y + q.z*q.z))
 
-    def scan_callback(self, msg):
-        self.latest_scan = msg
-
-    def status_callback(self, msg):
-        if msg.data == "ARRIVED":
-            if self.is_sleeping(): return # 자는 중엔 무시
-            if self.state == 1: 
-                self.get_logger().info("🚪 문 앞 도착. 2초 대기 후 돌진.")
-                self.set_sleep(2.0)
-                self.state = 2
+    def depth_callback(self, msg):
+        try:
+            self.latest_depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        except: pass
 
     def img_callback(self, msg):
         try:
             self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            if self.model is not None:
-                results = self.model(self.cv_image, verbose=False, conf=0.5)
-                annotated_frame = results[0].plot()
-                cv2.imshow("Mission 6 Debug", annotated_frame)
-                cv2.waitKey(1)
         except: pass
 
-    # === [유틸리티] 안정적인 대기 함수 ===
+    def status_callback(self, msg):
+        if msg.data == "ARRIVED":
+            self.is_navigating = False
+            if self.state == 1: 
+                self.get_logger().info("🚪 Arrived. Stabilizing for 2s.")
+                self.set_sleep(2.0)
+                self.state = 2
+
     def set_sleep(self, seconds):
         self.wait_until_time = self.get_clock().now().nanoseconds / 1e9 + seconds
-        # 대기 중에는 정지 명령
         self.cmd_vel_pub.publish(Twist())
 
     def is_sleeping(self):
         return (self.get_clock().now().nanoseconds / 1e9) < self.wait_until_time
 
-    def get_front_obstacle_dist(self):
-        if self.latest_scan is None: return 99.9
-        ranges = self.latest_scan.ranges
-        valid_ranges = [r for r in ranges if 0.1 < r < 10.0]
-        if not valid_ranges: return 99.9
-        return min(valid_ranges)
-    
-    # --- [1] Visual Servoing (0.6m 까지 접근) ---
-    def process_visual_servoing(self):
-        if self.cv_image is None or self.model is None: return False, False
-        
-        results = self.model(self.cv_image, verbose=False)
+    def get_depth_dist(self, cx, cy):
+        if self.latest_depth_image is None: return 99.9
+        h, w = self.latest_depth_image.shape
+        cx = int(np.clip(cx, 0, w-1))
+        cy = int(np.clip(cy, 0, h-1))
+        try:
+            val = self.latest_depth_image[cy, cx]
+            if np.isnan(val) or np.isinf(val) or val == 0: return 99.9
+            return float(val)
+        except: return 99.9
+
+    # --- [MODIFIED] Slow & Accurate Visual Servoing ---
+    def process_centering(self):
+        if self.cv_image is None or self.model is None: return False, 99.9
+
+        results = self.model(self.cv_image, verbose=False, conf=0.5)
         _, img_w, _ = self.cv_image.shape
-        
-        detected = False
-        center_x = 0
+        center_x_screen = img_w / 2
+
+        best_box = None
+        max_conf = -1.0
+
         for r in results:
             for box in r.boxes:
-                if int(box.cls[0]) == 0 and float(box.conf[0]) > 0.8:
-                    x_c, _, _, _ = box.xywh[0].tolist()
-                    center_x = x_c
-                    detected = True
-                    break
+                if int(box.cls[0]) == 0: 
+                    if float(box.conf[0]) > max_conf:
+                        max_conf = float(box.conf[0])
+                        best_box = box
         
-        if detected:
-            error_x = (img_w / 2) - center_x
-            ang_z = error_x * 0.005
-            ang_z = max(min(ang_z, 0.5), -0.5)
+        if best_box:
+            x1, y1, x2, y2 = map(int, best_box.xyxy[0].tolist())
+            cx = int((x1 + x2) / 2)
+            cy = int((y1 + y2) / 2)
+            dist = self.get_depth_dist(cx, cy)
 
-            front_dist = self.get_front_obstacle_dist()
-            cmd = Twist()
-            cmd.angular.z = float(ang_z)
+            # Calculate Error
+            error_x = center_x_screen - cx
             
-            # [수정] 0.6m 까지 접근
-            if front_dist > self.APPROACH_DIST:
-                cmd.linear.x = 1.0
-                is_arrived = False
-                # self.get_logger().info(f"🚀 접근 중... ({front_dist:.2f}m)")
+            # Draw Debug
+            cv2.rectangle(self.cv_image, (x1,y1), (x2,y2), (0,255,0), 2)
+            cv2.line(self.cv_image, (int(center_x_screen), 0), (int(center_x_screen), 1000), (0,0,255), 1)
+            cv2.putText(self.cv_image, f"Err: {error_x:.1f}", (cx, y1-20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255), 2)
+            cv2.imshow("Centering Nurse", self.cv_image)
+            cv2.waitKey(1)
+
+            # 1. Check if centered (Tighter Margin)
+            if abs(error_x) < self.CENTER_TOLERANCE:
+                self.cmd_vel_pub.publish(Twist()) # Hard Stop
+                return True, dist
             else:
-                cmd.linear.x = 0.0
-                is_arrived = True
-                self.get_logger().info(f"🛑 1차 접근 완료 (0.6m 도달)!")
+                # 2. Slow Rotation Logic
+                raw_z = error_x * self.P_GAIN
+                
+                # 3. Clamp speed to MAX_ROT_SPEED (safe, slow rotation)
+                if raw_z > 0:
+                    ang_z = min(raw_z, self.MAX_ROT_SPEED)
+                else:
+                    ang_z = max(raw_z, -self.MAX_ROT_SPEED)
 
-            self.cmd_vel_pub.publish(cmd)
-            return True, is_arrived
-            
-        return False, False
-
-    # --- [2] 간호사 좌표 확정 ---
-    def calculate_nurse_coordinates(self):
-        # 현재 거리는 약 0.8m (후진 완료 후이므로)
-        dist = self.TARGET_RADIUS 
-        self.nurse_x = self.rx + dist * math.cos(self.ryaw)
-        self.nurse_y = self.ry + dist * math.sin(self.ryaw)
-        self.get_logger().info(f"📍 간호사 좌표 Lock: ({self.nurse_x:.2f}, {self.nurse_y:.2f})")
-
-    # --- [3] 좌표 기반 공전 ---
-    def perform_coordinate_orbit(self):
-        elapsed = (self.get_clock().now().nanoseconds / 1e9) - self.orbit_start_time
-        if elapsed > 35.0: return True
-
-        dx = self.nurse_x - self.rx
-        dy = self.nurse_y - self.ry
-        curr_dist = math.hypot(dx, dy)
-        target_yaw = math.atan2(dy, dx)
-
-        cmd = Twist()
+                cmd = Twist()
+                cmd.angular.z = float(ang_z)
+                self.cmd_vel_pub.publish(cmd)
+                return False, dist
         
-        yaw_error = target_yaw - self.ryaw
-        while yaw_error > math.pi: yaw_error -= 2*math.pi
-        while yaw_error < -math.pi: yaw_error += 2*math.pi
-        cmd.angular.z = yaw_error * 1.5 
-
-        dist_error = curr_dist - self.TARGET_RADIUS
-        cmd.linear.x = dist_error * 1.0 
-        cmd.linear.y = self.SIDE_SPEED 
-
+        # Search Mode (Slow Scan)
+        cmd = Twist()
+        cmd.angular.z = 0.2
         self.cmd_vel_pub.publish(cmd)
-        return False
+        cv2.imshow("Centering Nurse", self.cv_image)
+        cv2.waitKey(1)
+        return False, 99.9
+
+    def calculate_global_coords(self, distance):
+        rx, ry, ryaw = self.rx, self.ry, self.ryaw
+        nx = rx + distance * math.cos(ryaw)
+        ny = ry + distance * math.sin(ryaw)
+        self.nurse_global_x = nx
+        self.nurse_global_y = ny
+        self.get_logger().info(f"📍 Nurse Locked: ({nx:.2f}, {ny:.2f})")
+
+    def generate_waypoints(self):
+        nx, ny = self.nurse_global_x, self.nurse_global_y
+        offset = math.sqrt(2) / 2.0 
+        
+        # 1: Bottom Right, 2: Bottom Left, 3: Top Left, 4: Top Right
+        offsets = [
+            (offset, offset),   
+            (-offset, offset),  
+            (-offset, -offset), 
+            (offset, -offset),  
+            (offset, offset)    
+        ]
+        
+        self.waypoints = []
+        for ox, oy in offsets:
+            wx = nx + ox
+            wy = ny + oy
+            wyaw = math.atan2(ny - wy, nx - wx)
+            self.waypoints.append({'x': wx, 'y': wy, 'yaw': wyaw})
+            
+        self.get_logger().info(f"🗺️ Generated {len(self.waypoints)} waypoints.")
 
     def send_nav_command(self, pose_dict):
         msg = PoseStamped()
@@ -197,78 +217,51 @@ class Mission6NurseController(Node):
         msg.pose.orientation.z = math.sin(yaw / 2.0)
         msg.pose.orientation.w = math.cos(yaw / 2.0)
         self.nav_pub.publish(msg)
+        self.is_navigating = True
 
     def mission_loop(self):
-        # [0] 안정성 체크: 자는 중이면 리턴
-        if self.robot_pose is None:
-            self.get_logger().info("⏳ Waiting for robot pose...", throttle_duration_sec=2.0)
+        if self.robot_pose is None: return
+        if self.start_delay < 10: 
+            self.start_delay += 1
             return
         
-        # 4초간 대기하며 시스템 안정화 (시작하자마자 멈추는 현상 방지)
-        if self.start_delay < 8: # 0.5초 * 8 = 4초
-            self.start_delay += 1
-            if self.start_delay % 2 == 0:
-                self.get_logger().info(f"⏳ System Warming up... {self.start_delay}/8")
-            return
+        if self.is_sleeping(): return
 
-        # [State 0] 문 앞으로 이동
         if self.state == 0:
             self.send_nav_command(self.ROOM_ENTRANCE)
-            self.state = 1
+            self.state = 1 
 
         elif self.state == 1: pass 
 
-        # [State 2] 0.6m 까지 접근
-        elif self.state == 2: 
-            is_detected, is_arrived = self.process_visual_servoing()
+        elif self.state == 2:
+            is_centered, dist = self.process_centering()
             
-            if is_detected:
-                if is_arrived: # 0.6m 도달함
-                    self.get_logger().info("✅ 0.6m 도달. 1초 대기 후 후진.")
-                    self.set_sleep(1.0)
-                    self.state = 2.5 # 후진 상태로 이동
+            if is_centered:
+                if dist < 5.0:
+                    self.get_logger().info(f"✅ Target Locked! Distance: {dist:.2f}m")
+                    # Stop and wait a moment to ensure stability before reading coords
+                    self.set_sleep(1.0) 
+                    self.calculate_global_coords(dist)
+                    self.state = 3
+                else:
+                    self.get_logger().warn("⚠️ Centered but depth invalid.")
 
-            else:
-                cmd = Twist()
-                cmd.angular.z = 0.3
-                self.cmd_vel_pub.publish(cmd)
-
-        # [State 2.5] 0.8m 까지 후진 (뒷걸음질)
-        elif self.state == 2.5:
-            front_dist = self.get_front_obstacle_dist()
-            
-            # 목표 거리(0.8m)보다 가까우면 뒤로 가라
-            if front_dist < self.TARGET_RADIUS:
-                cmd = Twist()
-                cmd.linear.x = -0.15 # 천천히 후진
-                self.cmd_vel_pub.publish(cmd)
-                # self.get_logger().info(f"🔙 거리 벌리는 중... ({front_dist:.2f}m -> 0.80m)")
-            else:
-                # 0.8m 확보 완료
-                self.cmd_vel_pub.publish(Twist()) # 정지
-                self.get_logger().info("✅ 안전거리 0.8m 확보 완료. 2초 안정화.")
-                self.set_sleep(2.0)
-                self.state = 3
-
-        # [State 3] 간호사 좌표 확정
         elif self.state == 3:
-            self.calculate_nurse_coordinates()
-            self.orbit_start_time = self.get_clock().now().nanoseconds / 1e9
+            self.generate_waypoints()
             self.state = 4
-            self.get_logger().info("💫 좌표 기반 공전 시작!")
+            self.current_waypoint_idx = 0
 
-        # [State 4] 좌표 기반 피드백 주행
         elif self.state == 4:
-            is_done = self.perform_coordinate_orbit()
-            if is_done:
-                self.cmd_vel_pub.publish(Twist()) # 정지
-                self.state = 5
-
-        # [State 5] 종료
-        elif self.state == 5:
-            self.get_logger().info("🎉 미션 완료! 멍멍!")
-            self.speech_pub.publish(String(data="bark"))
-            self.state = 6
+            if not self.is_navigating:
+                if self.current_waypoint_idx < len(self.waypoints):
+                    wp = self.waypoints[self.current_waypoint_idx]
+                    self.get_logger().info(f"🚶 Waypoint {self.current_waypoint_idx+1}")
+                    self.send_nav_command(wp)
+                    self.current_waypoint_idx += 1
+                else:
+                    self.get_logger().info("🎉 Mission Complete!")
+                    self.speech_pub.publish(String(data="bark"))
+                    self.state = 5
 
 def main(args=None):
     rclpy.init(args=args)
