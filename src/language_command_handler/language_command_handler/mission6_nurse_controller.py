@@ -32,7 +32,7 @@ class Mission6NurseController(Node):
         # [Precision Settings]
         self.CENTER_TOLERANCE = 10   
         self.P_GAIN = 0.0015         
-        self.MAX_ROT_SPEED = 0.3     
+        self.MAX_ROT_SPEED = 0.3      
 
         # Model Path
         try:
@@ -136,6 +136,7 @@ class Mission6NurseController(Node):
         return (self.get_clock().now().nanoseconds / 1e9) < self.wait_until_time
 
     def get_depth_dist(self, cx, cy):
+        """Original single-pixel depth (kept for fallback/scanning)"""
         if self.latest_depth_image is None: return 99.9
         h, w = self.latest_depth_image.shape
         cx = int(np.clip(cx, 0, w-1))
@@ -145,6 +146,61 @@ class Mission6NurseController(Node):
             if np.isnan(val) or np.isinf(val) or val == 0: return 99.9
             return float(val)
         except: return 99.9
+
+    # === NEW FUNCTION ADDED ===
+    def get_navy_weighted_distance(self, x1, y1, x2, y2):
+        """
+        Calculates MEDIAN depth of 'navy' pixels within the bounding box.
+        Prevents getting background depth (like between legs).
+        """
+        if self.cv_image is None or self.latest_depth_image is None:
+            return None
+
+        # 1. Define ROI (Region of Interest)
+        h, w, _ = self.cv_image.shape
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w, x2), min(h, y2)
+        
+        roi_rgb = self.cv_image[y1:y2, x1:x2]
+        roi_depth = self.latest_depth_image[y1:y2, x1:x2]
+
+        if roi_rgb.size == 0 or roi_depth.size == 0:
+            return None
+
+        # 2. Create Navy/Blue Mask in HSV
+        hsv_roi = cv2.cvtColor(roi_rgb, cv2.COLOR_BGR2HSV)
+        
+        # Navy Blue Range (Adjust these if needed)
+        # H: 90-140 (Blueish), S: >50 (Not white), V: 20-255 (Not pitch black)
+        lower_navy = np.array([90, 50, 20])
+        upper_navy = np.array([140, 255, 255])
+        
+        mask = cv2.inRange(hsv_roi, lower_navy, upper_navy)
+
+        # 3. Apply mask to depth
+        # Select depth pixels where mask is > 0 (Navy pixels)
+        target_depths = roi_depth[mask > 0]
+
+        # 4. Filter invalid data (0, NaN, Inf)
+        valid_depths = target_depths[~np.isnan(target_depths)]
+        valid_depths = valid_depths[~np.isinf(valid_depths)]
+        valid_depths = valid_depths[valid_depths > 0] 
+
+        pixel_count = len(valid_depths)
+
+        # Debug visualization of what the robot 'sees' as navy
+        # cv2.imshow("Navy Mask", mask) 
+        # cv2.waitKey(1)
+
+        if pixel_count < 10:
+            self.get_logger().warn(f"⚠️ Box found, but <10 Navy pixels detected. Lighting might be bad.")
+            return None
+
+        # 5. Calculate Median (Robust to outliers)
+        median_dist = float(np.median(valid_depths))
+        self.get_logger().info(f"🔵 Navy Scan: {pixel_count} px found | Median Dist: {median_dist:.3f}")
+        
+        return median_dist
 
     def process_centering(self):
         if self.cv_image is None or self.model is None: return False, 99.9
@@ -169,6 +225,8 @@ class Mission6NurseController(Node):
             x1, y1, x2, y2 = map(int, best_box.xyxy[0].tolist())
             cx = int((x1 + x2) / 2)
             cy = int((y1 + y2) / 2)
+            
+            # Default to center pixel for now
             dist = self.get_depth_dist(cx, cy)
             error_x = center_x_screen - cx
             
@@ -181,7 +239,18 @@ class Mission6NurseController(Node):
             # Check centered
             if abs(error_x) < self.CENTER_TOLERANCE:
                 self.cmd_vel_pub.publish(Twist()) 
-                return True, dist
+                
+                # === MODIFIED LOGIC: Use Navy Pixel Median ===
+                navy_dist = self.get_navy_weighted_distance(x1, y1, x2, y2)
+                
+                if navy_dist is not None:
+                    final_dist = navy_dist
+                    self.get_logger().info(f"🎯 Centered! Using Navy Median Dist: {final_dist:.3f}")
+                else:
+                    final_dist = dist # Fallback to center pixel
+                    self.get_logger().warn(f"⚠️ Centered! Navy detection failed, using Center Pixel: {final_dist:.3f}")
+
+                return True, final_dist
             else:
                 # Proportional Control
                 raw_z = error_x * self.P_GAIN
