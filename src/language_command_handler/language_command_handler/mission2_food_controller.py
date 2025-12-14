@@ -23,73 +23,31 @@ class Mission2FoodController(Node):
         super().__init__('mission2_food_controller')
 
         # === [Coordinate Definitions] ===
-        # Strategy 1: Small rooms first (2-3-4-8-5-6-16-15-13-14)
+        # Strategy 1: Small rooms first
         raw_strat_1 = [
-            (-2.03, -15.32, 0.34), # Room 2
-            (2.74, -15.30, 0.34),  # Room 3
-            (2.79, -8.65, 0.34),   # Room 4
-            (-3.79, -9.45, 0.34),  # Room 8
-            (-7.79, 0.94, 0.34),   # Room 5
-            (7.81, 0.85, 0.34),    # Room 6
-            (-8.22, 4.75, 0.32),   # Room 16
-            (-8.73, 11.20, 0.34),  # Room 15
-            (8.73, 11.20, 0.34),   # Room 13
-            (8.22, 4.75, 0.32),    # Room 14
+            (-2.03, -15.32, -1.61), (2.74, -15.30, -1.51), (2.79, -8.65, -1.60), 
+            (-3.79, -9.45, -1.05), (-7.79, 0.94, -1.64), (7.81, 0.85, -1.63), 
+            (-8.22, 4.75, 3.14), (-8.73, 11.20, 3.14), (8.73, 11.20, 0.04), (8.22, 4.75, -0.01),
         ]
 
-        # Strategy 2: Closest/Large rooms first (12-1-9-7-10-11)
+        # Strategy 2: Closest/Large rooms first
         raw_strat_2 = [
-            (-7.60, -26.70, 0.34),
-            (-7.71, -26.06, 0.33),
-
-
-            # Room 1 (간호사 방 옆)
-            (-5.73, -23.17, 0.34),
-            (-7.49, -22.97, 0.34),
-            (-7.91, -19.64, 0.34),
-            (-8.55, -16.80, 0.34),
-
-
-            # Room 9 (large)
-            (-5.89, -9.75, 0.34),
-            (-7.05, -8.96, 0.34),
-            (-7.15, -8.93, 0.34),
-            (-7.71, -8.77, 0.34),
-            (-7.79, -6.46, 0.34),
-            (-7.37, -2.51, 0.34),
-            (-7.71, -5.95, 0.34),
-
-
-            # Room 7
-            (5.55, -8.97, 0.33),
-            (6.88, -8.87, 0.34),
-            (7.79, -8.09, 0.34),
-
-
-            # Room 10 (large)
-            (5.08, -23.15, 0.34),
-            (8.61, -21.03, 0.37),
-            (9.07, -20.75, 0.34),
-            (9.08, -17.74, 0.34),
-
-
-            # Room 11 (large)
-            (5.51, -25.14, 0.33),
-            (6.76, -26.66, 0.34),
-            (6.17, -26.55, 0.33),
-            (4.74, -27.36, 0.34),
-            (7.97, -27.44, 0.33),
-            (-1.61, -27.10, 0.33),
+            (-7.60, -26.70, -3.04), (-7.71, -26.06, -1.57),
+            (-5.73, -23.17, 3.10), (-7.49, -22.97, 1.63), (-7.91, -19.64, 3.13), (-8.55, -16.80, 2.65),
+            (-5.89, -9.75, 2.49), (-7.05, -8.96, 3.13), (-7.15, -8.93, 2.35), (-7.71, -8.77, 1.56),
+            (-7.79, -6.46, 2.40), (-7.37, -2.51, 2.61), (-7.71, -5.95, 2.57),
+            (5.55, -8.97, -0.01), (6.88, -8.87, 0.89), (7.79, -8.09, 1.78),
+            (5.08, -23.15, 0.07), (8.61, -21.03, 1.59), (9.07, -20.75, 0.47), (9.08, -17.74, 0.49),
+            (5.51, -25.14, -1.63), (6.76, -26.66, 0.13), (6.17, -26.55, -0.80),
+            (4.74, -27.36, -2.09), (7.97, -27.44, -3.10), (-1.61, -27.10, -1.56),
         ]
 
-        # [Logic] Filter Duplicates & Set Order
-        # We start with Strategy 2. If that fails, we append Strategy 1.
+        # Logic: Filter duplicates & Init Strategy
         self.strat_2_coords = self.filter_coordinates(raw_strat_2)
         self.strat_1_coords = self.filter_coordinates(raw_strat_1)
         
-        # Initial Search Queue is Strategy 2
         self.SEARCH_QUEUE = self.strat_2_coords
-        self.current_strategy = 2 # Track which strategy we are running
+        self.current_strategy = 2
         
         self.get_logger().info(f"Loaded {len(self.SEARCH_QUEUE)} locations for Strategy 2.")
 
@@ -102,7 +60,7 @@ class Mission2FoodController(Node):
         self.CENTER_TOLERANCE = 15    
         self.MAX_ROT_SPEED = 0.3
         self.P_GAIN = 0.002           
-        self.CONFIDENCE_THRESHOLD = 0.7 # [REQ] High confidence only
+        self.CONFIDENCE_THRESHOLD = 0.7 
 
         # === [Model] ===
         try:
@@ -133,23 +91,20 @@ class Mission2FoodController(Node):
         # State Machine
         self.state = 0
         self.location_idx = 0
-        self.search_start_time = 0.0
-        self.SEARCH_TIMEOUT = 10.0 
         self.wait_until_time = 0.0
         self.is_navigating = False
         self.target_class_name = None 
 
         self.create_timer(0.1, self.mission_loop)
-        self.get_logger().info("🍔 Mission 2: Strategy 2 (Large Rooms) Started")
+        self.get_logger().info("🍔 Mission 2: Check & Skip Mode")
 
     def filter_coordinates(self, coords_list):
-        """ Removes duplicates that are too close (< 0.5m) """
         filtered = []
         for c in coords_list:
             is_duplicate = False
             for existing in filtered:
                 dist = math.hypot(c[0] - existing[0], c[1] - existing[1])
-                if dist < 0.5: # 0.5m threshold
+                if dist < 0.5: 
                     is_duplicate = True
                     break
             if not is_duplicate:
@@ -168,9 +123,8 @@ class Mission2FoodController(Node):
         if msg.data == "ARRIVED":
             self.is_navigating = False
             if self.state == 1:
-                self.get_logger().info("📍 Arrived. Scanning...")
-                self.set_sleep(1.0)
-                self.search_start_time = self.get_clock().now().nanoseconds / 1e9
+                self.get_logger().info("📍 Arrived. Checking View...")
+                self.set_sleep(1.5) # Wait for camera to stabilize
                 self.state = 2
 
     def set_sleep(self, seconds):
@@ -203,7 +157,6 @@ class Mission2FoodController(Node):
             return float(val)
         except: return 99.9
 
-    # === [REQ] Highest Confidence Logic ===
     def process_food_detection(self):
         if self.cv_image is None or self.model is None: return False, 0.0, 99.9, None
 
@@ -212,10 +165,10 @@ class Mission2FoodController(Node):
         center_x_screen = img_w / 2
 
         best_box = None
-        max_conf = -1.0 # Start lower than threshold
+        max_conf = -1.0 
         detected_class = None
 
-        # Iterate ALL detections to find the absolute best one
+        # Highest Confidence Selection
         for r in results:
             for box in r.boxes:
                 cls_id = int(box.cls[0])
@@ -223,7 +176,6 @@ class Mission2FoodController(Node):
                 conf = float(box.conf[0])
                 
                 if cls_name in self.ALL_FOODS:
-                    # [REQ] Strict check > 0.7 and > current max
                     if conf > self.CONFIDENCE_THRESHOLD and conf > max_conf:
                         max_conf = conf
                         best_box = box
@@ -236,14 +188,12 @@ class Mission2FoodController(Node):
             dist = self.get_depth_dist(cx, cy)
             error_x = center_x_screen - cx
 
-            # Visualization
             color = (0, 255, 0) if detected_class in self.EDIBLE_FOODS else (0, 0, 255)
             cv2.rectangle(self.cv_image, (x1,y1), (x2,y2), color, 2)
             cv2.putText(self.cv_image, f"{detected_class} {max_conf:.2f} {dist:.2f}m", (x1, y1-10), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
             cv2.imshow("Food Search", self.cv_image)
             cv2.waitKey(1)
-            
             return True, error_x, dist, detected_class
 
         cv2.imshow("Food Search", self.cv_image)
@@ -262,63 +212,64 @@ class Mission2FoodController(Node):
                 self.send_nav_command(target)
                 self.state = 1
             else:
-                # [REQ] Strategy Switch Logic
                 if self.current_strategy == 2:
-                    self.get_logger().warn("⚠️ Strategy 2 finished. Switching to Strategy 1 (Small Rooms)...")
-                    self.SEARCH_QUEUE = self.strat_1_coords # Load Strat 1
-                    self.location_idx = 0 # Reset Index
+                    self.get_logger().warn("⚠️ Strat 2 Done. Switching to Strat 1...")
+                    self.SEARCH_QUEUE = self.strat_1_coords 
+                    self.location_idx = 0 
                     self.current_strategy = 1
-                    self.state = 0 # Restart loop with new queue
+                    self.state = 0 
                 else:
-                    self.get_logger().info("🏁 All Strategies exhausted. Mission End.")
+                    self.get_logger().info("🏁 Mission End.")
                     self.state = 5
 
         elif self.state == 1: pass 
 
-        # [State 2] Scan & Detect
+        # [State 2] Check View (No Blind Rotation)
         elif self.state == 2:
             detected, error_x, dist, cls_name = self.process_food_detection()
-            
-            elapsed = (self.get_clock().now().nanoseconds / 1e9) - self.search_start_time
-            if elapsed > self.SEARCH_TIMEOUT:
-                self.get_logger().warn("❌ Nothing found here. Moving to next.")
-                self.cmd_vel_pub.publish(Twist()) 
-                self.location_idx += 1
-                self.state = 0
-                return
 
             if detected:
+                # Food found! Start Centering
                 self.target_class_name = cls_name
+                
                 if abs(error_x) < self.CENTER_TOLERANCE:
                     self.cmd_vel_pub.publish(Twist()) 
                     self.get_logger().info(f"🎯 Locked: {cls_name} at {dist:.2f}m")
-                    self.state = 3
+                    self.state = 3 # Go to Approach
                 else:
+                    # Visual Servoing (Rotate to Center)
+                    # Left (error_x > 0) -> Positive Yaw -> Correct
                     raw_z = error_x * self.P_GAIN
                     if raw_z > 0: ang_z = min(raw_z, self.MAX_ROT_SPEED)
                     else: ang_z = max(raw_z, -self.MAX_ROT_SPEED)
+                    
                     cmd = Twist()
                     cmd.angular.z = float(ang_z)
                     self.cmd_vel_pub.publish(cmd)
             else:
-                cmd = Twist()
-                cmd.angular.z = 0.2
-                self.cmd_vel_pub.publish(cmd)
+                # [FIX] No Food Found -> Skip Rotation -> Next Coordinate
+                self.get_logger().info("❌ No food in view. Skipping to next.")
+                self.cmd_vel_pub.publish(Twist()) # Ensure stop
+                self.location_idx += 1
+                self.state = 0
 
-        # [State 3] Approach
+        # [State 3] Approach (Distance Check happens here)
         elif self.state == 3:
             detected, error_x, dist, cls_name = self.process_food_detection()
 
             if not detected:
-                self.get_logger().warn("⚠️ Lost target! Re-scanning.")
+                self.get_logger().warn("⚠️ Lost target while approaching! Skipping.")
                 self.cmd_vel_pub.publish(Twist())
-                self.state = 2
+                self.location_idx += 1 # Or you could set state=2 to try finding it again
+                self.state = 0
                 return
 
             cmd = Twist()
+            # Keep centering while moving
             ang_z = error_x * self.P_GAIN
             cmd.angular.z = float(np.clip(ang_z, -0.3, 0.3))
 
+            # Move forward until 0.6m
             if dist > self.APPROACH_DIST:
                 cmd.linear.x = 0.3 
             else:
