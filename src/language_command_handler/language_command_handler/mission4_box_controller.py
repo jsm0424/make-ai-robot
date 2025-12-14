@@ -174,6 +174,10 @@ class MissionBoxController(Node):
 
         # [Step 0] 관측 위치 이동
         if self.step == 0:
+            if self.nav_pub.get_subscription_count() == 0:
+                self.get_logger().info("📡 Waiting for Navigator connection...", throttle_duration_sec=1.0)
+                return # 연결될 때까지 명령 안 보내고 리턴
+            
             self.get_logger().info("🚀 Moving to Observation Point")
             self.send_nav_command(self.OBSERVATION_POSE)
             self.step = 1

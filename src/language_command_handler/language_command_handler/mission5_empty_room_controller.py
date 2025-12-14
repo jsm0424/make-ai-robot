@@ -7,179 +7,206 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 import math
-import time
 import os
 from ament_index_python.packages import get_package_share_directory
 
 try:
     from ultralytics import YOLO
 except ImportError:
-    print("❌ Ultralytics library not found. Please install: pip install ultralytics")
+    print("❌ Ultralytics library not found.")
 
 class MissionEmptyRoomController(Node):
     def __init__(self):
         super().__init__('mission5_empty_room_controller')
 
-        # 1. 모델 경로 설정
+        # ================= [좌표 설정] =================
+        self.OBSERVATION_POSE = {'x': 3.44, 'y': 9.18, 'yaw': 0.6}
+
+        self.PATH_NO_SIGN = [
+            {'x': 6.69, 'y': 10.6, 'yaw': 1.57},
+            {'x': 6.69, 'y': 14.0, 'yaw': 1.57},
+            {'x': 6.69, 'y': 10.66, 'yaw': -1.57},
+            {'x': 0.0, 'y': 9.3, 'yaw': 3.0}
+        ]
+
+        self.PATH_WITH_SIGN = [
+            {'x': 0.0, 'y': 9.3, 'yaw': 3.0},
+            {'x': -6.69, 'y': 10.66, 'yaw': 1.57},
+            {'x': -6.69, 'y': 14.0, 'yaw': 1.57},
+            {'x': -6.69, 'y': 10.66, 'yaw': -1.57}
+        ]
+        # ===============================================
+
         try:
             pkg_share = get_package_share_directory('language_command_handler')
-            default_model_path = os.path.join(pkg_share, 'models', 'sign_model.pt')
+            model_path = os.path.join(pkg_share, 'models', 'sign_model.pt')
         except:
-            default_model_path = 'models/sign_model.pt'
+            model_path = 'src/language_command_handler/models/sign_model.pt'
 
-        self.declare_parameter('model_path', default_model_path)
-        self.model_path = self.get_parameter('model_path').value
-
-        # 2. YOLO 모델 로드
-        self.get_logger().info(f"📂 Loading YOLO model from: {self.model_path}")
+        self.model = None
         try:
-            self.model = YOLO(self.model_path)
-            self.get_logger().info("✅ YOLO Model Loaded Successfully.")
-        except Exception as e:
-            self.get_logger().error(f"❌ Failed to load model: {e}")
-            self.model = None
+            self.model = YOLO(model_path)
+            self.get_logger().info(f"✅ Model loaded: {model_path}")
+        except:
+            self.get_logger().error("❌ Failed to load YOLO model.")
 
-        # ================= 좌표 설정 =================
-        self.CHECK_POSE = {'x': 3.76, 'y': 8.62, 'yaw': 0.6687}
-        self.ROOM_ENTRY_POSE = {'x': 6.66, 'y': 11.41, 'yaw': 1.57} 
-        self.ROOM_INSIDE_POSE = {'x': 6.66, 'y': 13.3, 'yaw': 1.57}  
-        self.DETOUR_WP1 = {'x': 2.0, 'y': 10.0, 'yaw': 2.356}        
-        self.DETOUR_ENTRY_POSE = {'x': -6.66, 'y': 11.41, 'yaw': 1.57} 
-        self.DETOUR_INSIDE_POSE = {'x': -6.66, 'y': 13.3, 'yaw': 1.57} 
-        # ============================================
-
-        # 통신 설정
         self.nav_pub = self.create_publisher(PoseStamped, '/navigator/input_pose', 10)
         self.nav_sub = self.create_subscription(String, '/navigator/status', self.status_callback, 10)
         self.img_sub = self.create_subscription(Image, '/camera_face/image', self.img_callback, 10)
+        self.speech_pub = self.create_publisher(String, '/robot_dog/speech', 10)
 
         self.bridge = CvBridge()
         self.cv_image = None
         
-        # 상태 변수
-        self.step = 0 
-        self.is_nav_active = False 
+        # 상태 관리
+        self.state = 0
+        self.nav_ready = True
         
-        # [NEW] 감지 활성화 플래그 (True일 때만 YOLO 실행)
-        self.detection_enabled = False
+        # [핵심 수정] 명령 전송 여부 확인 플래그
+        self.goal_sent = False 
+        
+        # 감지 변수
+        self.detect_start_time = 0.0
+        self.sign_detect_count = 0
+        self.is_detecting = False
 
-        self.create_timer(1.0, self.mission_loop)
-        self.get_logger().info("🧠 Mission 5 Controller Started (Efficient Detection Mode).")
+        self.current_path = [] 
+        self.path_index = 0    
 
-    def status_callback(self, msg):
-        if msg.data == "ARRIVED":
-            self.is_nav_active = False 
-            
-            if self.step == 0:
-                self.get_logger().info("✅ Arrived at Check Point.")
-                self.step = 1
-            elif self.step == 10:
-                self.get_logger().info("✅ Arrived at Room Door. Entering...")
-                self.step = 11
-            elif self.step == 11:
-                self.get_logger().info("✅ Successfully Entered Empty Room.")
-                self.step = 5
-            elif self.step == 20:
-                self.get_logger().info("✅ Arrived at Detour Waypoint 1.")
-                self.step = 21
-            elif self.step == 21:
-                self.get_logger().info("✅ Arrived at Detour Room Door. Entering...")
-                self.step = 22
-            elif self.step == 22:
-                self.get_logger().info("✅ Successfully Entered Detour Room.")
-                self.step = 5
+        self.create_timer(0.5, self.control_loop)
+        self.get_logger().info("🚀 Mission 5 Controller Started (Logic Fixed!)")
 
     def img_callback(self, msg):
-        """카메라 영상 처리 및 디버깅 화면"""
         try:
             self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            # 디버깅용 화면 표시 (옵션)
-            if self.model is not None:
-                results = self.model(self.cv_image, verbose=False, conf=0.5)
-                annotated_frame = results[0].plot()
-                cv2.imshow("Mission5 Debug", annotated_frame)
+            if self.is_detecting and self.model is not None:
+                results = self.model(self.cv_image, verbose=False, conf=0.6)
+                found = False
+                for r in results:
+                    if len(r.boxes) > 0:
+                        found = True
+                        break
+                if found:
+                    self.sign_detect_count += 1
+                
+                annotated = results[0].plot()
+                cv2.imshow("Mission5 Cam", annotated)
                 cv2.waitKey(1)
-        except: pass
+            else:
+                if self.cv_image is not None:
+                    cv2.imshow("Mission5 Cam", self.cv_image)
+                    cv2.waitKey(1)
+        except Exception: pass
 
-    def send_nav_command(self, pose_dict):
+    def status_callback(self, msg):
+        # 네비게이터가 도착했다고 하면 True로 변경
+        if msg.data == "ARRIVED":
+            self.nav_ready = True
+
+    def send_nav_goal(self, pose_dict):
+        # 이미 명령을 수행 중(False)이라면 중복 전송 방지
+        if not self.nav_ready: return
+
         msg = PoseStamped()
         msg.header.frame_id = "map"
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.pose.position.x = pose_dict['x']
-        msg.pose.position.y = pose_dict['y']
-        yaw = pose_dict['yaw']
+        msg.pose.position.x = float(pose_dict['x'])
+        msg.pose.position.y = float(pose_dict['y'])
+        yaw = float(pose_dict['yaw'])
         msg.pose.orientation.z = math.sin(yaw / 2.0)
         msg.pose.orientation.w = math.cos(yaw / 2.0)
-        self.nav_pub.publish(msg)
-        self.is_nav_active = True
-
-    def detect_stop_sign(self):
-        # 이 함수 호출 시점에는 이미 detection_enabled가 True여야 함
-        if self.cv_image is None or self.model is None: return False
         
-        # img_callback에서 이미 최신 프레임을 받고 있으므로
-        # 여기서는 가장 최근 프레임을 한 번 더 확실하게 추론 (또는 img_callback 결과를 저장해서 써도 됨)
-        results = self.model(self.cv_image, verbose=False)
-        for result in results:
-            for box in result.boxes:
-                if box.conf[0].item() > 0.5:
-                    return True
-        return False
+        self.nav_pub.publish(msg)
+        
+        # 명령을 보냈으므로 '이동 중' 상태로 변경
+        self.nav_ready = False 
+        self.get_logger().info(f"📍 Moving to: {pose_dict['x']}, {pose_dict['y']}")
 
-    def mission_loop(self):
-        # [Step 0] 이동 중에는 감지 꺼둠
-        if self.step == 0 and not self.is_nav_active:
-            self.detection_enabled = False # 확실하게 끄기
-            self.get_logger().info("Command: Move to Check Point")
-            self.send_nav_command(self.CHECK_POSE)
+    def control_loop(self):
+        if self.robot_pose is None:
+            self.get_logger().info("⏳ Waiting for robot pose...", throttle_duration_sec=2.0)
+            return
+        
+        # 4초간 대기하며 시스템 안정화 (시작하자마자 멈추는 현상 방지)
+        if self.start_delay < 8: # 0.5초 * 8 = 4초
+            self.start_delay += 1
+            if self.start_delay % 2 == 0:
+                self.get_logger().info(f"⏳ System Warming up... {self.start_delay}/8")
+            return
+        
+        
+        # [State 0] 시작
+        if self.state == 0:
+            if self.nav_pub.get_subscription_count() == 0:
+                self.get_logger().info("📡 Waiting for Navigator connection...", throttle_duration_sec=1.0)
+                return # 연결될 때까지 명령 안 보내고 리턴
 
-        # [Step 1] 도착 -> 카메라 안정화 및 감지 켜기
-        elif self.step == 1:
-            self.get_logger().info("👀 Stabilizing Camera & Enabling Detection...")
-            self.detection_enabled = True # [NEW] 여기서부터 YOLO 실행 시작
-            time.sleep(2.0)
-            self.step = 2
+            self.state = 1
+            self.goal_sent = False # 초기화
 
-        # [Step 2] 판단
-        elif self.step == 2:
-            has_sign = self.detect_stop_sign()
+        # [State 1] 관측 위치로 이동
+        elif self.state == 1:
+            # 1. 아직 명령을 안 보냈으면 -> 보낸다
+            if not self.goal_sent:
+                if self.nav_ready:
+                    self.send_nav_goal(self.OBSERVATION_POSE)
+                    self.goal_sent = True # "보냈음" 체크
             
-            # 판단 끝났으면 감지 끄기 (자원 절약 및 디버그 창 멈춤)
-            self.detection_enabled = False 
-            # 디버그 창 닫기 (선택 사항)
-            cv2.destroyAllWindows() 
-
-            if has_sign:
-                self.get_logger().info("🛑 STOP SIGN DETECTED! Taking Detour Path.")
-                self.step = 20 
+            # 2. 명령을 보냈는데, 다시 nav_ready가 True가 되었다 -> 도착했다!
             else:
-                self.get_logger().info("🟢 No Sign. Proceeding to Room.")
-                self.step = 10
+                if self.nav_ready: 
+                    self.get_logger().info("👀 관측 위치 도착! 표지판 스캔 시작 (3초).")
+                    self.state = 2
+                    self.is_detecting = True
+                    self.sign_detect_count = 0
+                    self.detect_start_time = self.get_clock().now().nanoseconds / 1e9
+                    self.goal_sent = False # 다음 단계를 위해 리셋
 
-        # [이후 단계들] 모두 detection_enabled = False 상태 유지
-        elif self.step == 10 and not self.is_nav_active:
-            self.get_logger().info("Command: Move to Door Front (Right Room)")
-            self.send_nav_command(self.ROOM_ENTRY_POSE)
+        # [State 2] 표지판 감지 및 판단
+        elif self.state == 2:
+            current_time = self.get_clock().now().nanoseconds / 1e9
+            
+            if current_time - self.detect_start_time > 3.0:
+                self.is_detecting = False
+                cv2.destroyAllWindows()
+                
+                if self.sign_detect_count > 5:
+                    self.get_logger().info(f"🛑 STOP 감지됨 ({self.sign_detect_count}회) -> 왼쪽 방(Room 2) 우회")
+                    self.current_path = self.PATH_WITH_SIGN
+                else:
+                    self.get_logger().info(f"🟢 표지판 없음 ({self.sign_detect_count}회) -> 오른쪽 방(Room 1) 진입")
+                    self.current_path = self.PATH_NO_SIGN
+                
+                self.path_index = 0
+                self.state = 3 
+                self.goal_sent = False # 리셋
 
-        elif self.step == 11 and not self.is_nav_active:
-            self.get_logger().info("Command: Enter Room (Straight Line)")
-            self.send_nav_command(self.ROOM_INSIDE_POSE)
+        # [State 3] 경로 주행
+        elif self.state == 3:
+            if self.path_index >= len(self.current_path):
+                self.get_logger().info("🎉 미션 5 완료! 멍멍!")
+                self.speech_pub.publish(String(data="bark"))
+                self.state = 99
+                return
 
-        elif self.step == 20 and not self.is_nav_active:
-            self.get_logger().info("Command: Move to Detour Waypoint 1")
-            self.send_nav_command(self.DETOUR_WP1)
+            target_pose = self.current_path[self.path_index]
 
-        elif self.step == 21 and not self.is_nav_active:
-            self.get_logger().info("Command: Move to Door Front (Left Room)")
-            self.send_nav_command(self.DETOUR_ENTRY_POSE)
+            # 1. 명령 안 보냈으면 -> 보냄
+            if not self.goal_sent:
+                if self.nav_ready:
+                    self.get_logger().info(f"🚶 Step [{self.path_index + 1}/{len(self.current_path)}] 이동 시작")
+                    self.send_nav_goal(target_pose)
+                    self.goal_sent = True
+            
+            # 2. 도착했으면 -> 인덱스 증가 및 리셋
+            else:
+                if self.nav_ready:
+                    self.get_logger().info(f"✅ Waypoint 도착.")
+                    self.path_index += 1
+                    self.goal_sent = False # 다음 웨이포인트를 위해 리셋
 
-        elif self.step == 22 and not self.is_nav_active:
-            self.get_logger().info("Command: Enter Detour Room (Straight Line)")
-            self.send_nav_command(self.DETOUR_INSIDE_POSE)
-
-        elif self.step == 5:
-            self.get_logger().info("🎉 Mission 5 Complete!")
-            self.step = 6 
+        elif self.state == 99:
+            pass
 
 def main(args=None):
     rclpy.init(args=args)

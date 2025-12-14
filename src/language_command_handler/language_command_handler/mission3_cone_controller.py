@@ -129,8 +129,23 @@ class MissionConeController(Node):
         return detected
 
     def mission_loop(self):
+        if self.robot_pose is None:
+            self.get_logger().info("⏳ Waiting for robot pose...", throttle_duration_sec=2.0)
+            return
+        
+        # 4초간 대기하며 시스템 안정화 (시작하자마자 멈추는 현상 방지)
+        if self.start_delay < 8: # 0.5초 * 8 = 4초
+            self.start_delay += 1
+            if self.start_delay % 2 == 0:
+                self.get_logger().info(f"⏳ System Warming up... {self.start_delay}/8")
+            return
+        
         # [Step 0] 시작 -> 관측 위치로 이동 명령
         if self.step == 0:
+            if self.nav_pub.get_subscription_count() == 0:
+                self.get_logger().info("📡 Waiting for Navigator connection...", throttle_duration_sec=1.0)
+                return # 연결될 때까지 명령 안 보내고 리턴
+            
             self.get_logger().info("Command: Move to Observation Point")
             self.send_nav_command(self.OBSERVATION_POSE)
             self.step = 1 # 이동 중 상태
