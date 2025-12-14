@@ -23,12 +23,12 @@ class Mission6NurseController(Node):
         super().__init__('mission6_nurse_controller')
 
         # === [Settings] ===
-        self.ROOM_ENTRANCE = {'x': -5.93, 'y': -24.92, 'yaw': -3.13}
+        self.ROOM_ENTRANCE = {'x': -6.68, 'y': -24.92, 'yaw': -3.13}
         
         # [Precision Settings]
-        self.CENTER_TOLERANCE = 10   # [Modified] Tighter margin (10 pixels)
-        self.P_GAIN = 0.0015         # [Modified] Slower reaction speed
-        self.MAX_ROT_SPEED = 0.3     # [Modified] Safety speed cap (rad/s)
+        self.CENTER_TOLERANCE = 10   
+        self.P_GAIN = 0.0015         
+        self.MAX_ROT_SPEED = 0.3     
 
         # Model Path
         try:
@@ -71,7 +71,7 @@ class Mission6NurseController(Node):
         self.is_navigating = False
 
         self.create_timer(0.1, self.mission_loop)
-        self.get_logger().info("🧠 Mission 6: High Precision Mode")
+        self.get_logger().info("🧠 Mission 6: Hardcoded Yaw Mode")
 
     def pose_callback(self, msg):
         self.robot_pose = msg
@@ -116,7 +116,6 @@ class Mission6NurseController(Node):
             return float(val)
         except: return 99.9
 
-    # --- [MODIFIED] Slow & Accurate Visual Servoing ---
     def process_centering(self):
         if self.cv_image is None or self.model is None: return False, 99.9
 
@@ -140,7 +139,6 @@ class Mission6NurseController(Node):
             cy = int((y1 + y2) / 2)
             dist = self.get_depth_dist(cx, cy)
 
-            # Calculate Error
             error_x = center_x_screen - cx
             
             # Draw Debug
@@ -150,26 +148,20 @@ class Mission6NurseController(Node):
             cv2.imshow("Centering Nurse", self.cv_image)
             cv2.waitKey(1)
 
-            # 1. Check if centered (Tighter Margin)
             if abs(error_x) < self.CENTER_TOLERANCE:
-                self.cmd_vel_pub.publish(Twist()) # Hard Stop
+                self.cmd_vel_pub.publish(Twist()) 
                 return True, dist
             else:
-                # 2. Slow Rotation Logic
                 raw_z = error_x * self.P_GAIN
-                
-                # 3. Clamp speed to MAX_ROT_SPEED (safe, slow rotation)
                 if raw_z > 0:
                     ang_z = min(raw_z, self.MAX_ROT_SPEED)
                 else:
                     ang_z = max(raw_z, -self.MAX_ROT_SPEED)
-
                 cmd = Twist()
                 cmd.angular.z = float(ang_z)
                 self.cmd_vel_pub.publish(cmd)
                 return False, dist
         
-        # Search Mode (Slow Scan)
         cmd = Twist()
         cmd.angular.z = 0.2
         self.cmd_vel_pub.publish(cmd)
@@ -185,27 +177,34 @@ class Mission6NurseController(Node):
         self.nurse_global_y = ny
         self.get_logger().info(f"📍 Nurse Locked: ({nx:.2f}, {ny:.2f})")
 
+    # --- [MODIFIED] Use Hardcoded Yaw Values ---
     def generate_waypoints(self):
         nx, ny = self.nurse_global_x, self.nurse_global_y
         offset = math.sqrt(2) / 2.0 
         
-        # 1: Bottom Right, 2: Bottom Left, 3: Top Left, 4: Top Right
-        offsets = [
-            (offset, offset),   
-            (-offset, offset),  
-            (-offset, -offset), 
-            (offset, -offset),  
-            (offset, offset)    
+        # Tuple Format: (Offset X, Offset Y, Hardcoded Yaw)
+        # Based on your notes: 
+        # 1: (x+off, y+off) -> 3.14
+        # 2: (x-off, y+off) -> 3.14
+        # 3: (x-off, y-off) -> -1.57
+        # 4: (x+off, y-off) -> 0.0
+        # 5: (x+off, y+off) -> 1.57
+        
+        waypoints_def = [
+            (offset,  offset,  3.14),   # Point 1
+            (-offset, offset,  3.14),   # Point 2
+            (-offset, -offset, -1.57),  # Point 3
+            (offset,  -offset, 0.0),    # Point 4
+            (offset,  offset,  1.57)    # Point 5 (Return)
         ]
         
         self.waypoints = []
-        for ox, oy in offsets:
+        for ox, oy, fixed_yaw in waypoints_def:
             wx = nx + ox
             wy = ny + oy
-            wyaw = math.atan2(ny - wy, nx - wx)
-            self.waypoints.append({'x': wx, 'y': wy, 'yaw': wyaw})
+            self.waypoints.append({'x': wx, 'y': wy, 'yaw': fixed_yaw})
             
-        self.get_logger().info(f"🗺️ Generated {len(self.waypoints)} waypoints.")
+        self.get_logger().info(f"🗺️ Generated {len(self.waypoints)} waypoints with fixed yaw.")
 
     def send_nav_command(self, pose_dict):
         msg = PoseStamped()
@@ -239,7 +238,6 @@ class Mission6NurseController(Node):
             if is_centered:
                 if dist < 5.0:
                     self.get_logger().info(f"✅ Target Locked! Distance: {dist:.2f}m")
-                    # Stop and wait a moment to ensure stability before reading coords
                     self.set_sleep(1.0) 
                     self.calculate_global_coords(dist)
                     self.state = 3
