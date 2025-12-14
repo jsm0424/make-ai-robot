@@ -45,10 +45,10 @@ class Mission2FoodController(Node):
         self.strat_2_coords = self.filter_coordinates(raw_strat_2)
         self.strat_1_coords = self.filter_coordinates(raw_strat_1)
         
-        self.SEARCH_QUEUE = self.strat_2_coords
-        self.current_strategy = 2
+        self.SEARCH_QUEUE = self.strat_1_coords
+        self.current_strategy = 1
         
-        self.get_logger().info(f"Loaded {len(self.SEARCH_QUEUE)} locations for Strategy 2.")
+        self.get_logger().info(f"Loaded {len(self.SEARCH_QUEUE)} locations for Strategy 1.")
 
         # === [Settings] ===
         self.EDIBLE_FOODS = ['agood', 'bgood', 'pgood']
@@ -102,13 +102,8 @@ class Mission2FoodController(Node):
         for c in coords_list:
             is_duplicate = False
             for existing in filtered:
-<<<<<<< HEAD
                 dist = math.hypot(c[0] - existing['x'], c[1] - existing['y'])
                 if dist < 0.5: # 0.5m threshold
-=======
-                dist = math.hypot(c[0] - existing[0], c[1] - existing[1])
-                if dist < 0.5: 
->>>>>>> 5eccc6ecfe33ab104f01e9aaa16c6c8adfa303a9
                     is_duplicate = True
                     break
             if not is_duplicate:

@@ -24,7 +24,7 @@ class Mission6NurseController(Node):
 
         # === [Settings] ===
         # Location 1: Room Entrance
-        self.LOC_1_DOOR = {'x': -6.68, 'y': -24.92, 'yaw': -3.13}
+        self.LOC_1_DOOR = {'x': -6.3788, 'y': -24.8077, 'yaw': -3.13}
         
         # Location 2: Inside Room (Fallback) - Extracted from your image
         self.LOC_2_INSIDE = {'x': -7.65, 'y': -25.25, 'yaw': -2.06}
@@ -88,7 +88,7 @@ class Mission6NurseController(Node):
         
         # Search Timer
         self.search_start_time = 0.0
-        self.SEARCH_TIMEOUT = 10.0 # Give up location 1 after 15 seconds
+        self.SEARCH_TIMEOUT = 60.0 # Give up location 1 after 15 seconds
 
         self.create_timer(0.1, self.mission_loop)
         self.get_logger().info("🧠 Mission 6: Dual-Location Search Strategy Started")
@@ -259,12 +259,14 @@ class Mission6NurseController(Node):
                 
                 cmd = Twist()
                 cmd.angular.z = float(ang_z)
+                cmd.linear.x = 0.05
                 self.cmd_vel_pub.publish(cmd)
                 return False, dist
         
         # --- Logic: Not Found (Scan) ---
         cmd = Twist()
         cmd.angular.z = 0.2 # Slow scan
+        cmd.linear.x = 0.05
         self.cmd_vel_pub.publish(cmd)
         cv2.imshow("Centering Nurse", self.cv_image)
         cv2.waitKey(1)
@@ -280,12 +282,12 @@ class Mission6NurseController(Node):
 
     def generate_waypoints(self):
         nx, ny = self.nurse_global_x, self.nurse_global_y
-        offset = math.sqrt(2) / 2.0 
+        offset = math.sqrt(2) / 2.0
         
         # (x_off, y_off, yaw)
         waypoints_def = [
-            (offset,  offset,  3.14),
-            (-offset, offset,  3.14),
+            (offset,  offset,  -3.13),
+            (-offset, offset,  -3.13),
             (-offset, -offset, -1.57),
             (offset,  -offset, 0.0),
             (offset,  offset,  1.57)

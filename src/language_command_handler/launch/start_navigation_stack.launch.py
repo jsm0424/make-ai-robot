@@ -20,12 +20,12 @@ def generate_launch_description():
     global_localization = _include_from_package('localization', 'global_localizer.launch.py')
     planner = _include_from_package('astar_planner', 'astar_planner.launch.py')
     path_tracker = _include_from_package('path_tracker', 'path_tracker_launch.py')
-    perception = _include_from_package('perception', 'perception.launch.py')
+    # perception = _include_from_package('perception', 'perception.launch.py')
 
     return LaunchDescription([
         odom_localization,
         global_localization,
         planner,
         path_tracker,
-        perception,
+        # perception,
     ])

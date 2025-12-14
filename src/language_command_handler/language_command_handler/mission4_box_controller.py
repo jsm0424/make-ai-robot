@@ -16,7 +16,7 @@ class MissionBoxController(Node):
         super().__init__('mission_box_controller')
 
         # === [설정] ===
-        self.OBSERVATION_POSE = {'x': 0.0, 'y': 7.8, 'yaw': 1.57}
+        self.OBSERVATION_POSE = {'x': 0.0, 'y': 7.2, 'yaw': 1.57}
         self.BOX_LOCATIONS = ['LEFT', 'CENTER', 'RIGHT']
 
         self.WAYPOINTS = {

@@ -93,12 +93,13 @@ class MissionEmptyRoomController(Node):
                     self.sign_detect_count += 1
                 
                 annotated = results[0].plot()
-                cv2.imshow("Mission5 Cam", annotated)
-                cv2.waitKey(1)
+                # cv2.imshow("Mission5 Cam", annotated)
+                # cv2.waitKey(1)
             else:
-                if self.cv_image is not None:
-                    cv2.imshow("Mission5 Cam", self.cv_image)
-                    cv2.waitKey(1)
+                # if self.cv_image is not None:
+                #     cv2.imshow("Mission5 Cam", self.cv_image)
+                #     cv2.waitKey(1)
+                pass
         except Exception: pass
 
     def status_callback(self, msg):
