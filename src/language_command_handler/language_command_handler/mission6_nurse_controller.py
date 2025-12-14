@@ -23,7 +23,11 @@ class Mission6NurseController(Node):
         super().__init__('mission6_nurse_controller')
 
         # === [Settings] ===
-        self.ROOM_ENTRANCE = {'x': -6.68, 'y': -24.92, 'yaw': -3.13}
+        # Location 1: Room Entrance
+        self.LOC_1_DOOR = {'x': -6.68, 'y': -24.92, 'yaw': -3.13}
+        
+        # Location 2: Inside Room (Fallback) - Extracted from your image
+        self.LOC_2_INSIDE = {'x': -7.65, 'y': -25.25, 'yaw': -2.06}
         
         # [Precision Settings]
         self.CENTER_TOLERANCE = 10   
@@ -65,13 +69,29 @@ class Mission6NurseController(Node):
         
         self.waypoints = []
         self.current_waypoint_idx = 0
+        
+        # State Machine:
+        # 0: Move to Door (Loc 1)
+        # 1: Wait for Arrival at Door
+        # 2: Search/Center Nurse (First Attempt)
+        # 2.5: Move to Inside (Loc 2) - Triggered if search fails
+        # 2.6: Wait for Arrival Inside
+        # 2.7: Search/Center Nurse (Second Attempt)
+        # 3: Calculate Coords
+        # 4: Generate Waypoints
+        # 5: Execute Waypoints
         self.state = 0
+        
         self.start_delay = 0 
         self.wait_until_time = 0.0
         self.is_navigating = False
+        
+        # Search Timer
+        self.search_start_time = 0.0
+        self.SEARCH_TIMEOUT = 10.0 # Give up location 1 after 15 seconds
 
         self.create_timer(0.1, self.mission_loop)
-        self.get_logger().info("🧠 Mission 6: Hardcoded Yaw Mode")
+        self.get_logger().info("🧠 Mission 6: Dual-Location Search Strategy Started")
 
     def pose_callback(self, msg):
         self.robot_pose = msg
@@ -93,10 +113,20 @@ class Mission6NurseController(Node):
     def status_callback(self, msg):
         if msg.data == "ARRIVED":
             self.is_navigating = False
+            
+            # Arrived at Door (Loc 1)
             if self.state == 1: 
-                self.get_logger().info("🚪 Arrived. Stabilizing for 2s.")
+                self.get_logger().info("🚪 Arrived at Door. Starting Search 1.")
                 self.set_sleep(2.0)
+                self.search_start_time = self.get_clock().now().nanoseconds / 1e9
                 self.state = 2
+            
+            # Arrived Inside (Loc 2)
+            elif self.state == 2.6:
+                self.get_logger().info("🏠 Arrived Inside. Starting Search 2.")
+                self.set_sleep(2.0)
+                self.search_start_time = self.get_clock().now().nanoseconds / 1e9
+                self.state = 2.7 # Go to second search state
 
     def set_sleep(self, seconds):
         self.wait_until_time = self.get_clock().now().nanoseconds / 1e9 + seconds
@@ -126,6 +156,7 @@ class Mission6NurseController(Node):
         best_box = None
         max_conf = -1.0
 
+        # Find best person
         for r in results:
             for box in r.boxes:
                 if int(box.cls[0]) == 0: 
@@ -133,37 +164,38 @@ class Mission6NurseController(Node):
                         max_conf = float(box.conf[0])
                         best_box = box
         
+        # --- Logic: If Found ---
         if best_box:
             x1, y1, x2, y2 = map(int, best_box.xyxy[0].tolist())
             cx = int((x1 + x2) / 2)
             cy = int((y1 + y2) / 2)
             dist = self.get_depth_dist(cx, cy)
-
             error_x = center_x_screen - cx
             
-            # Draw Debug
+            # Debug Draw
             cv2.rectangle(self.cv_image, (x1,y1), (x2,y2), (0,255,0), 2)
             cv2.line(self.cv_image, (int(center_x_screen), 0), (int(center_x_screen), 1000), (0,0,255), 1)
-            cv2.putText(self.cv_image, f"Err: {error_x:.1f}", (cx, y1-20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,255), 2)
             cv2.imshow("Centering Nurse", self.cv_image)
             cv2.waitKey(1)
 
+            # Check centered
             if abs(error_x) < self.CENTER_TOLERANCE:
                 self.cmd_vel_pub.publish(Twist()) 
                 return True, dist
             else:
+                # Proportional Control
                 raw_z = error_x * self.P_GAIN
-                if raw_z > 0:
-                    ang_z = min(raw_z, self.MAX_ROT_SPEED)
-                else:
-                    ang_z = max(raw_z, -self.MAX_ROT_SPEED)
+                if raw_z > 0: ang_z = min(raw_z, self.MAX_ROT_SPEED)
+                else: ang_z = max(raw_z, -self.MAX_ROT_SPEED)
+                
                 cmd = Twist()
                 cmd.angular.z = float(ang_z)
                 self.cmd_vel_pub.publish(cmd)
                 return False, dist
         
+        # --- Logic: Not Found (Scan) ---
         cmd = Twist()
-        cmd.angular.z = 0.2
+        cmd.angular.z = 0.2 # Slow scan
         self.cmd_vel_pub.publish(cmd)
         cv2.imshow("Centering Nurse", self.cv_image)
         cv2.waitKey(1)
@@ -177,25 +209,17 @@ class Mission6NurseController(Node):
         self.nurse_global_y = ny
         self.get_logger().info(f"📍 Nurse Locked: ({nx:.2f}, {ny:.2f})")
 
-    # --- [MODIFIED] Use Hardcoded Yaw Values ---
     def generate_waypoints(self):
         nx, ny = self.nurse_global_x, self.nurse_global_y
         offset = math.sqrt(2) / 2.0 
         
-        # Tuple Format: (Offset X, Offset Y, Hardcoded Yaw)
-        # Based on your notes: 
-        # 1: (x+off, y+off) -> 3.14
-        # 2: (x-off, y+off) -> 3.14
-        # 3: (x-off, y-off) -> -1.57
-        # 4: (x+off, y-off) -> 0.0
-        # 5: (x+off, y+off) -> 1.57
-        
+        # (x_off, y_off, yaw)
         waypoints_def = [
-            (offset,  offset,  3.14),   # Point 1
-            (-offset, offset,  3.14),   # Point 2
-            (-offset, -offset, -1.57),  # Point 3
-            (offset,  -offset, 0.0),    # Point 4
-            (offset,  offset,  1.57)    # Point 5 (Return)
+            (offset,  offset,  3.14),
+            (-offset, offset,  3.14),
+            (-offset, -offset, -1.57),
+            (offset,  -offset, 0.0),
+            (offset,  offset,  1.57)
         ]
         
         self.waypoints = []
@@ -204,7 +228,7 @@ class Mission6NurseController(Node):
             wy = ny + oy
             self.waypoints.append({'x': wx, 'y': wy, 'yaw': fixed_yaw})
             
-        self.get_logger().info(f"🗺️ Generated {len(self.waypoints)} waypoints with fixed yaw.")
+        self.get_logger().info(f"🗺️ Generated {len(self.waypoints)} waypoints.")
 
     def send_nav_command(self, pose_dict):
         msg = PoseStamped()
@@ -226,29 +250,60 @@ class Mission6NurseController(Node):
         
         if self.is_sleeping(): return
 
+        # [State 0] Move to Door
         if self.state == 0:
-            self.send_nav_command(self.ROOM_ENTRANCE)
+            self.send_nav_command(self.LOC_1_DOOR)
             self.state = 1 
 
         elif self.state == 1: pass 
 
+        # [State 2] Search Attempt 1 (At Door)
         elif self.state == 2:
             is_centered, dist = self.process_centering()
             
+            # Check for Timeout (Fail at Loc 1)
+            elapsed = (self.get_clock().now().nanoseconds / 1e9) - self.search_start_time
+            if elapsed > self.SEARCH_TIMEOUT:
+                self.get_logger().warn("❌ Nurse not found at Door. Moving Inside!")
+                self.cmd_vel_pub.publish(Twist()) # Stop spinning
+                self.state = 2.5 # Transition to move inside
+                return
+
             if is_centered:
-                if dist < 5.0:
-                    self.get_logger().info(f"✅ Target Locked! Distance: {dist:.2f}m")
+                if dist < 8.0:
+                    self.get_logger().info(f"✅ Found at Door! Dist: {dist:.2f}m")
                     self.set_sleep(1.0) 
                     self.calculate_global_coords(dist)
                     self.state = 3
                 else:
                     self.get_logger().warn("⚠️ Centered but depth invalid.")
 
+        # [State 2.5] Move Inside (Fallback)
+        elif self.state == 2.5:
+            self.send_nav_command(self.LOC_2_INSIDE)
+            self.state = 2.6 # Wait for arrival
+
+        elif self.state == 2.6: pass
+
+        # [State 2.7] Search Attempt 2 (Inside)
+        elif self.state == 2.7:
+            # Same search logic, but no timeout needed (or can add another timeout if desired)
+            is_centered, dist = self.process_centering()
+            
+            if is_centered:
+                if dist < 8.0:
+                    self.get_logger().info(f"✅ Found Inside! Dist: {dist:.2f}m")
+                    self.set_sleep(1.0) 
+                    self.calculate_global_coords(dist)
+                    self.state = 3
+
+        # [State 3] Generate Path
         elif self.state == 3:
             self.generate_waypoints()
             self.state = 4
             self.current_waypoint_idx = 0
 
+        # [State 4] Execute Waypoints
         elif self.state == 4:
             if not self.is_navigating:
                 if self.current_waypoint_idx < len(self.waypoints):
