@@ -486,7 +486,7 @@
       <include>
         <uri>model://Scrubs</uri>
         <static>true</static>
-        <pose>-9.05 -26.2 0.0 0.0 0.0 0.0</pose>
+        <pose>-10 -26.5 0.0 0.0 0.0 0.0</pose>
       </include>
     </model>
     <model name="WhiteChipChair_1">

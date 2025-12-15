@@ -259,7 +259,7 @@ class Mission6NurseController(Node):
                 
                 cmd = Twist()
                 cmd.angular.z = float(ang_z)
-                cmd.linear.x = 0.05
+                cmd.linear.x = 0.1
                 self.cmd_vel_pub.publish(cmd)
                 return False, dist
         
@@ -278,7 +278,7 @@ class Mission6NurseController(Node):
         ny = ry + distance * math.sin(ryaw)
         self.nurse_global_x = nx-0.2
         self.nurse_global_y = ny-0.2
-        self.get_logger().info(f"📍 Nurse Locked: ({nx:.2f}, {ny:.2f})")
+        self.get_logger().info(f"📍 Nurse Locked: ({self.nurse_global_x:.2f}, {self.nurse_global_y:.2f})")
 
     def generate_waypoints(self):
         nx, ny = self.nurse_global_x, self.nurse_global_y
