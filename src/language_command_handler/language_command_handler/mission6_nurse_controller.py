@@ -233,8 +233,8 @@ class Mission6NurseController(Node):
             # Debug Draw
             cv2.rectangle(self.cv_image, (x1,y1), (x2,y2), (0,255,0), 2)
             cv2.line(self.cv_image, (int(center_x_screen), 0), (int(center_x_screen), 1000), (0,0,255), 1)
-            cv2.imshow("Centering Nurse", self.cv_image)
-            cv2.waitKey(1)
+            # cv2.imshow("Centering Nurse", self.cv_image)
+            # cv2.waitKey(1)
 
             # Check centered
             if abs(error_x) < self.CENTER_TOLERANCE:
@@ -268,25 +268,25 @@ class Mission6NurseController(Node):
         cmd.angular.z = 0.2 # Slow scan
         cmd.linear.x = 0.05
         self.cmd_vel_pub.publish(cmd)
-        cv2.imshow("Centering Nurse", self.cv_image)
-        cv2.waitKey(1)
+        # cv2.imshow("Centering Nurse", self.cv_image)
+        # cv2.waitKey(1)
         return False, 99.9
 
     def calculate_global_coords(self, distance):
         rx, ry, ryaw = self.rx, self.ry, self.ryaw
         nx = rx + distance * math.cos(ryaw)
         ny = ry + distance * math.sin(ryaw)
-        self.nurse_global_x = nx
-        self.nurse_global_y = ny
+        self.nurse_global_x = nx-0.2
+        self.nurse_global_y = ny-0.2
         self.get_logger().info(f"📍 Nurse Locked: ({nx:.2f}, {ny:.2f})")
 
     def generate_waypoints(self):
         nx, ny = self.nurse_global_x, self.nurse_global_y
-        offset = math.sqrt(2) / 2.0
+        offset = math.sqrt(2) / 2.0 
         
         # (x_off, y_off, yaw)
         waypoints_def = [
-            (offset,  offset,  -3.13),
+            # (offset,  offset,  -3.13),
             (-offset, offset,  -3.13),
             (-offset, -offset, -1.57),
             (offset,  -offset, 0.0),
