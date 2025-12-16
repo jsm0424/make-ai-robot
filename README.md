@@ -4,6 +4,9 @@ This repository is for ROS2 practice of Fall 2025 "Creating Robot Artificial Int
 
 It contains a collection of ROS2 packages for controlling the Unitree Go1 quadruped robot in Gazebo simulation environment.
 
+https://www.notion.so/25-2-2c0b7aabf3f78061b16de39985b3f9f9
+
+
 ---
 
 # ⚠️ Caution (Only After Git Clone)
