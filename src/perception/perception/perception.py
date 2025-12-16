@@ -1,12 +1,14 @@
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from sensor_msgs.msg import Image, CameraInfo, PointCloud2
+from sensor_msgs.msg import Image
 from std_msgs.msg import String, Float32
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
 from ultralytics import YOLO
+import message_filters
 import os
 from ament_index_python.packages import get_package_share_directory
 
@@ -14,191 +16,140 @@ class PerceptionNode(Node):
     def __init__(self):
         super().__init__('perception_node')
 
-        # --- 1. Robust Model Loading ---
-        # This function tries 3 different ways to find your file.
-        final_model_path = self.find_model_path('food_model.pt')
-        
-        self.declare_parameter('model_path', final_model_path)
-        self.declare_parameter('debug_mode', False)
-        self.debug_mode = self.get_parameter('debug_mode').get_parameter_value().bool_value
-
-        self.get_logger().info(f'Loading YOLO model from: {final_model_path}')
-        
-        try:
-            self.model = YOLO(final_model_path)
-        except Exception as e:
-            self.get_logger().error(f"CRITICAL: Failed to load model at {final_model_path}. Error: {e}")
-            self.get_logger().warn("Downloading standard YOLOv8n.pt as emergency fallback...")
-            self.model = YOLO("yolov8n.pt") 
-
+        # 1. Initialize CV Bridge and Parameters
         self.bridge = CvBridge()
-        self.latest_depth_img = None 
-        self.is_processing = False
+        
+        # Define the "Bad" labels that stop publication
+        self.bad_labels = ['bbad', 'abad', 'pbad']
+        # Define "Good" labels (optional list, but we rely on "not bad" logic here)
+        self.target_labels = ['agood', 'pgood', 'bgood']  
+        
+        # 2. Load the YOLO Model
+        try:
+            package_share_directory = get_package_share_directory('perception')
+            model_path = os.path.join(package_share_directory, 'models', 'food_model.pt')
+            self.get_logger().info(f'Loading YOLO model from: {model_path}')
+            self.model = YOLO(model_path)
+        except Exception as e:
+            self.get_logger().error(f'Failed to load model: {e}. Check path.')
 
-        self.edible_classes = ['agood', 'bgood', 'pgood'] 
-        self.target_classes = [
-            'agood', 'abad', 'bgood', 'bbad', 'pgood', 'pbad', 
-            'nurse', 'cone', 'sign', 'box'
-        ]
+        # 3. Subscribers (Synchronized RGB + Depth)
+        self.rgb_sub = message_filters.Subscriber(self, Image, '/camera_top/image')
+        self.depth_sub = message_filters.Subscriber(self, Image, '/camera_top/depth')
 
-        # --- 2. QoS Profile ---
-        qos_policy = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1
+        # Use ApproximateTimeSynchronizer
+        self.ts = message_filters.ApproximateTimeSynchronizer(
+            [self.rgb_sub, self.depth_sub], 
+            queue_size=10, 
+            slop=0.1
         )
+        self.ts.registerCallback(self.image_callback)
 
-        # --- 3. Publishers ---
-        self.pub_detection_img = self.create_publisher(Image, '/camera/detections/image', 10)
+        # 4. Publishers
+        self.pub_debug_image = self.create_publisher(Image, '/camera/detections/image', 10)
         self.pub_labels = self.create_publisher(String, '/detections/labels', 10)
         self.pub_distance = self.create_publisher(Float32, '/detections/distance', 10)
         self.pub_speech = self.create_publisher(String, '/robot_dog/speech', 10)
 
-        # --- 4. Subscribers ---
-        self.create_subscription(Image, '/camera_top/depth', self.depth_callback, qos_policy)
-        self.create_subscription(Image, '/camera_top/image', self.rgb_callback, qos_policy)
-        self.create_subscription(PointCloud2, '/camera_top/points', lambda msg: None, qos_policy)
-        self.create_subscription(CameraInfo, '/camera_top/camera_info', lambda msg: None, qos_policy)
-        
-        self.get_logger().info('Perception Node Started (Robust Path Finding)')
+        self.get_logger().info('Perception Node Initialized (High Conf Filter Mode)')
 
-    def find_model_path(self, filename):
-        """
-        Tries to find the model file in multiple locations.
-        """
-        # Option A: The standard ROS2 install location (requires setup.py data_files)
+    def image_callback(self, rgb_msg, depth_msg):
         try:
-            pkg_share = get_package_share_directory('perception')
-            install_path = os.path.join(pkg_share, 'models', filename)
-            if os.path.exists(install_path):
-                return install_path
-        except Exception:
-            pass
-
-        # Option B: Relative path from workspace root (common during development)
-        # Assumes you run ros2 run from the folder 'make-ai-robot'
-        dev_path = os.path.join(os.getcwd(), 'src', 'perception', 'perception', 'models', filename)
-        if os.path.exists(dev_path):
-            return dev_path
-        
-        # Option C: Another common relative path variation
-        dev_path_2 = os.path.join(os.getcwd(), 'src', 'perception', 'models', filename)
-        if os.path.exists(dev_path_2):
-            return dev_path_2
-
-        # Option D: Absolute path hardcoded (Update this if needed!)
-        # This is the specific path you mentioned in your prompt
-        abs_path = os.path.expanduser(f'~/make-ai-robot/src/perception/perception/models/{filename}')
-        if os.path.exists(abs_path):
-            return abs_path
-
-        self.get_logger().warn(f"Model file '{filename}' not found in any standard location.")
-        return filename # Return filename hoping YOLO finds it in current dir
-
-    def depth_callback(self, msg):
-        try:
-            self.latest_depth_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
-        except Exception:
-            pass
-
-    def rgb_callback(self, msg):
-        if self.is_processing: return
-        self.is_processing = True
-        
-        try:
-            cv_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            height, width, _ = cv_img.shape
-            
-            # Inference
-            results = self.model(cv_img, verbose=False, imgsz=320, conf=0.5)
-            
-            current_frame_label = "None"
-            current_frame_dist = 0.0
-            speech_cmd = "None"
-            
-            boundary_left = int(width * 0.2)
-            boundary_right = int(width * 0.8)
-            cv2.line(cv_img, (boundary_left, 0), (boundary_left, height), (0, 255, 255), 2)
-            cv2.line(cv_img, (boundary_right, 0), (boundary_right, height), (0, 255, 255), 2)
-
-            for result in results:
-                for box in result.boxes:
-                    cls_id = int(box.cls[0])
-                    if cls_id >= len(self.model.names): continue
-                    cls_name = self.model.names[cls_id]
-                    if cls_name not in self.target_classes: continue
-
-                    x1, y1, x2, y2 = map(int, box.xyxy[0].cpu().numpy())
-                    center_x = int((x1 + x2) / 2)
-                    center_y = int((y1 + y2) / 2)
-
-                    dist = 0.0
-                    if self.latest_depth_img is not None:
-                        safe_x = np.clip(center_x, 0, width - 1)
-                        safe_y = np.clip(center_y, 0, height - 1)
-                        try:
-                            raw_dist = self.latest_depth_img[safe_y, safe_x]
-                            if not (np.isnan(raw_dist) or np.isinf(raw_dist)):
-                                dist = float(raw_dist)
-                        except IndexError: pass
-
-                    is_edible = cls_name in self.edible_classes
-                    is_centered = boundary_left < center_x < boundary_right
-                    is_close = 0.1 < dist < 3.0
-
-                    box_color = (0, 255, 0)
-                    if is_edible:
-                        current_frame_label = cls_name
-                        current_frame_dist = dist
-                        if is_centered and is_close:
-                            speech_cmd = "bark"
-                            box_color = (0, 0, 255)
-                            cv2.circle(cv_img, (center_x, center_y), 5, (0, 0, 255), -1)
-
-                    cv2.rectangle(cv_img, (x1, y1), (x2, y2), box_color, 2)
-                    cv2.putText(cv_img, f"{cls_name} {dist:.1f}m", (x1, y1 - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
-
-            # --- DEBUGGING OVERLAY (LABELS) ---
-            # 화면 상단에 상태 정보를 보여주는 검은색 바 추가
-            overlay_h = 60
-            cv2.rectangle(cv_img, (0, 0), (width, overlay_h), (0, 0, 0), -1)
-            
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            # 왼쪽: 감지된 객체 및 거리
-            cv2.putText(cv_img, f"OBJ: {current_frame_label}", (10, 25), font, 0.6, (255, 255, 255), 1)
-            cv2.putText(cv_img, f"DST: {current_frame_dist:.2f}m", (10, 50), font, 0.6, (255, 255, 255), 1)
-            
-            # 오른쪽: 명령 상태
-            cmd_color = (0, 255, 0) if speech_cmd == "bark" else (100, 100, 100)
-            cv2.putText(cv_img, f"CMD: {speech_cmd}", (width - 160, 40), font, 0.7, cmd_color, 2)
-
-            # --- PUBLISH & SHOW ---
-            self.pub_detection_img.publish(self.bridge.cv2_to_imgmsg(cv_img, encoding='bgr8'))
-            self.pub_labels.publish(String(data=current_frame_label))
-            self.pub_distance.publish(Float32(data=current_frame_dist))
-            self.pub_speech.publish(String(data=speech_cmd))
-
-            # 로컬 화면 띄우기 (imshow + waitKey)
-            cv2.imshow("YOLO Debug View", cv_img)
-            cv2.waitKey(1)
-
+            cv_image = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
+            cv_depth = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
         except Exception as e:
-            self.get_logger().error(f"Error: {e}")
-        finally:
-            self.is_processing = False
+            self.get_logger().error(f'CV Bridge error: {e}')
+            return
+
+        height, width, _ = cv_image.shape
+        
+        # --- 1. Run Object Detection ---
+        results = self.model(cv_image, verbose=False)
+        
+        # --- 2. Find Highest Confidence Object > 0.8 ---
+        best_box = None
+        max_conf = 0.8  # Start threshold at 0.8
+        
+        # Iterate through all results to find the single best box
+        for result in results:
+            for box in result.boxes:
+                conf = float(box.conf[0])
+                if conf > max_conf:
+                    max_conf = conf
+                    best_box = box
+
+        # If no object was found with conf > 0.8, we publish nothing and return
+        if best_box is None:
+            return
+
+        # --- 3. Check Label ---
+        cls_id = int(best_box.cls[0])
+        label = self.model.names[cls_id]
+
+        # STRICT FILTER: If the best label is "bad", publish NO topics.
+        if label in self.bad_labels:
+            return
+
+        # --- 4. Process Valid Detection ---
+        # If we are here, we have a "Good" object with Conf > 0.8
+        
+        # Extract Box Coordinates
+        x1, y1, x2, y2 = map(int, best_box.xyxy[0])
+        cx = int((x1 + x2) / 2)
+        cy = int((y1 + y2) / 2)
+
+        # Draw Bounding Box (Green)
+        cv2.rectangle(cv_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        
+        # Draw Label Text
+        current_dist = 0.0
+        # Depth Calculation
+        if 0 <= cx < width and 0 <= cy < height:
+            raw_depth = cv_depth[cy, cx]
+            if isinstance(raw_depth, (float, np.float32, np.float64)):
+                current_dist = float(raw_depth)
+            else:
+                current_dist = float(raw_depth) / 1000.0 # Handle mm to m conversion if needed
+
+        label_text = f"{label} {max_conf:.2f} {current_dist:.2f}m"
+        cv2.putText(cv_image, label_text, (x1, y1 - 10), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.circle(cv_image, (cx, cy), 5, (0, 0, 255), -1)
+
+        # Logic for Speech (Bark if centered)
+        left_limit = int(width * 0.2)
+        right_limit = int(width * 0.8)
+        
+        # Draw region lines for visualization
+        cv2.line(cv_image, (left_limit, 0), (left_limit, height), (0, 255, 255), 1)
+        cv2.line(cv_image, (right_limit, 0), (right_limit, height), (0, 255, 255), 1)
+
+        speech_cmd = "None"
+        if left_limit <= cx <= right_limit:
+            speech_cmd = "bark"
+
+        # --- 5. Publish Topics ---
+        
+        # Topic 1: Image with Bounding Box
+        out_img_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
+        out_img_msg.header = rgb_msg.header
+        self.pub_debug_image.publish(out_img_msg)
+
+        # Topic 2: Label
+        self.pub_labels.publish(String(data=label))
+
+        # Topic 3: Distance
+        self.pub_distance.publish(Float32(data=current_dist))
+
+        # Topic 4: Speech
+        self.pub_speech.publish(String(data=speech_cmd))
 
 def main(args=None):
     rclpy.init(args=args)
     node = PerceptionNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        cv2.destroyAllWindows() # 종료 시 윈도우 닫기 추가
-        node.destroy_node()
-        rclpy.shutdown()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
